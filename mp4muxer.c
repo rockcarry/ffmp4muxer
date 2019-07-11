@@ -1,0 +1,280 @@
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <netinet/in.h>
+#include "mp4muxer.h"
+
+#ifndef offsetof
+#define offsetof(type, member) ((size_t)&((type*)0)->member)
+#endif
+#define MP4_FOURCC(a, b, c, d)  (((a) << 0) | ((b) << 8) | ((c) << 16) | ((d) << 24))
+
+typedef struct {
+    #pragma pack(1)
+    uint32_t ftyp_size;
+    uint32_t ftyp_type;
+    uint32_t ftyp_brand;
+    uint32_t ftyp_version;
+    uint32_t ftyp_compat1;
+    uint32_t ftyp_compat2;
+    uint32_t ftyp_compat3;
+
+    uint32_t moov_size;
+    uint32_t moov_type;
+
+    uint32_t mvhd_size;
+    uint32_t mvhd_type;
+    uint8_t  mvhd_version;
+    uint8_t  mvhd_flags[3];
+    uint32_t mvhd_create_time;
+    uint32_t mvhd_modify_time;
+    uint32_t mvhd_timescale;
+    uint32_t mvhd_duration;
+    uint32_t mvhd_playrate;
+    uint16_t mvhd_volume;
+    uint8_t  mvhd_reserved[10];
+    uint32_t mvhd_matrix[9];
+    uint8_t  mvhd_predefined[24];
+    uint32_t mvhd_next_trackid;
+
+    uint32_t trakv_size;
+    uint32_t trakv_type;
+
+    uint32_t tkhdv_size;
+    uint32_t tkhdv_type;
+    uint8_t  tkhdv_version;
+    uint8_t  tkhdv_flags[3];
+    uint32_t tkhdv_create_time;
+    uint32_t tkhdV_modify_time;
+    uint32_t tkhdv_trackid;
+    uint32_t tkhdv_reserved1;
+    uint32_t tkhdv_duration;
+    uint32_t tkhdv_reserved2;
+    uint32_t tkhdv_reserved3;
+    uint16_t tkhdv_layer;
+    uint16_t tkhdv_alternate_group;
+    uint16_t tkhdv_volume;
+    uint16_t tkhdv_reserved4;
+    uint32_t tkhdv_matrix[9];
+    uint32_t tkhdv_width;
+    uint32_t tkhdv_height;
+
+    uint32_t mdiav_size;
+    uint32_t mdiav_type;
+
+    uint32_t mdhdv_size;
+    uint32_t mdhdv_type;
+    uint8_t  mdhdv_version;
+    uint8_t  mdhdv_flags[3];
+    uint32_t mdhdv_create_time;
+    uint32_t mdhdv_modify_time;
+    uint32_t mdhdv_timescale;
+    uint32_t mdhdv_duration;
+    uint16_t mdhdv_language;
+    uint16_t mdhdv_predefined;
+
+    uint32_t hdlrv_size;
+    uint32_t hdlrv_type;
+    uint8_t  hdlrv_version;
+    uint8_t  hdlrv_flags[3];
+    uint8_t  hdlrv_predefined[4];
+    uint32_t hdlrv_handler_type;
+    uint8_t  hdlrv_reserved[12];
+    uint8_t  hdlrv_name[13];
+
+    uint32_t minfv_size;
+    uint32_t minfv_type;
+
+    uint32_t vmhd_size;
+    uint32_t vmhd_type;
+    uint8_t  vmhd_version;
+    uint8_t  vmhd_flags[3];
+    uint16_t vmhd_balance;
+    uint16_t vmhd_reserved;
+
+    uint32_t dinfv_size;
+    uint32_t dinfv_type;
+
+    uint32_t drefv_size;
+    uint32_t drefv_type;
+    uint8_t  drefv_version;
+    uint8_t  drefv_flags[3];
+    uint32_t drefv_entry_count;
+
+    uint32_t urlv_size;
+    uint32_t urlv_type;
+    uint8_t  urlv_version;
+    uint8_t  urlv_flags[3];
+
+    uint32_t stblv_size;
+    uint32_t stblv_type;
+
+    uint32_t stsdv_size;
+    uint32_t stsdv_type;
+    uint8_t  stsdv_version;
+    uint8_t  stsdv_flags[3];
+    uint32_t stsdv_entry_count;
+
+    uint32_t avc1_size;
+    uint32_t avc1_type;
+    uint8_t  avc1_reserved1[6];
+    uint16_t avc1_data_refidx;
+    uint16_t avc1_predefined1;
+    uint16_t avc1_reserved2;
+    uint32_t avc1_predefined2[3];
+    uint16_t avc1_width;
+    uint16_t avc1_height;
+    uint32_t avc1_horiz_res;
+    uint32_t avc1_vert_res;
+    uint32_t avc1_reserved3;
+    uint16_t avc1_frame_count;
+    uint8_t  avc1_compressor[32];
+    uint16_t avc1_depth;
+    uint16_t avc1_predefined;
+
+    uint32_t avcc_size;
+    uint32_t avcc_type;
+    uint8_t  avcc_config_ver;
+    uint8_t  avcc_avc_profile;
+    uint8_t  avcc_profile_compat;
+    uint8_t  avcc_avc_level;
+    uint8_t  avcc_nalulen;
+    uint8_t  avcc_sps_num;
+    uint16_t avcc_sps_len;
+    uint16_t avcc_sps_data[256];
+    uint8_t  avcc_pps_num;
+    uint16_t avcc_pps_len;
+    uint8_t  avcc_pps_data[256];
+    
+    uint32_t sttsv_size;
+    uint32_t sttsv_type;
+    uint8_t  sttsv_version;
+    uint8_t  sttsv_flags[3];
+
+    uint32_t traka_size;
+    uint32_t traka_type;
+
+    // mdat box
+    uint32_t mdat_size;
+    uint32_t mdat_type;
+    #pragma pack()
+
+    FILE *fp;
+} MP4FILE;
+
+void* mp4muxer_init(char *file, int w, int h, int frate, int duration, char *sps_data, int sps_len, char *pps_data, int pps_len)
+{
+    MP4FILE *mp4 = calloc(1, sizeof(MP4FILE));
+    if (!mp4) return NULL;
+    mp4->fp = fopen(file, "wb");
+    if (!mp4->fp) {
+        free(mp4);
+        return NULL;
+    }
+
+    mp4->ftyp_size           = htonl(offsetof(MP4FILE, moov_size ) - offsetof(MP4FILE, ftyp_size));
+    mp4->ftyp_type           = MP4_FOURCC('f', 't', 'y', 'p');
+    mp4->ftyp_brand          = MP4_FOURCC('i', 's', 'o', 'm');
+    mp4->ftyp_version        = htonl(256);
+    mp4->ftyp_compat1        = MP4_FOURCC('i', 's', 'o', 'm');
+    mp4->ftyp_compat2        = MP4_FOURCC('i', 's', 'o', '2');
+    mp4->ftyp_compat3        = MP4_FOURCC('m', 'p', '4', '1');
+
+    mp4->moov_size           = htonl(offsetof(MP4FILE, mdat_size ) - offsetof(MP4FILE, moov_size));
+    mp4->moov_type           = MP4_FOURCC('m', 'o', 'o', 'v');
+    mp4->mvhd_size           = htonl(offsetof(MP4FILE, traka_size) - offsetof(MP4FILE, mvhd_size));
+    mp4->mvhd_type           = MP4_FOURCC('m', 'v', 'h', 'd');
+    mp4->mvhd_timescale      = 1000;
+    mp4->mvhd_duration       = duration;
+    mp4->mvhd_playrate       = 0x00010000;
+    mp4->mvhd_matrix[0]      = 0x00010000;
+    mp4->mvhd_matrix[4]      = 0x00010000;
+    mp4->mvhd_matrix[8]      = 0x40000000;
+
+    mp4->trakv_size          = htonl(offsetof(MP4FILE, trakv_size) - offsetof(MP4FILE, trakv_size));
+    mp4->trakv_type          = MP4_FOURCC('t', 'r', 'a', 'k');
+    mp4->tkhdv_size          = htonl(offsetof(MP4FILE, mdiav_size) - offsetof(MP4FILE, tkhdv_size));
+    mp4->tkhdv_type          = MP4_FOURCC('t', 'k', 'h', 'd');
+    mp4->tkhdv_flags[0]      = 0x7;
+    mp4->tkhdv_trackid       = 1;
+    mp4->tkhdv_duration      = duration;
+    mp4->tkhdv_matrix[0]     = 0x00010000;
+    mp4->tkhdv_matrix[4]     = 0x00010000;
+    mp4->tkhdv_matrix[8]     = 0x40000000;
+    mp4->tkhdv_width         = htonl(w << 16);
+    mp4->tkhdv_height        = htonl(h << 16);
+
+    mp4->mdiav_size          = htonl(offsetof(MP4FILE, traka_size) - offsetof(MP4FILE, mdiav_size));
+    mp4->mdiav_type          = MP4_FOURCC('m', 'd', 'i', 'a');
+    mp4->mdhdv_size          = htonl(offsetof(MP4FILE, hdlrv_size) - offsetof(MP4FILE, mdhdv_size));
+    mp4->mdhdv_type          = MP4_FOURCC('m', 'd', 'h', 'd');
+    mp4->mdhdv_timescale     = 1000;
+    mp4->mdhdv_duration      = duration;
+    mp4->hdlrv_size          = htonl(offsetof(MP4FILE, minfv_size) - offsetof(MP4FILE, hdlrv_size));
+    mp4->hdlrv_type          = MP4_FOURCC('h', 'd', 'l', 'r');
+    mp4->hdlrv_handler_type  = MP4_FOURCC('v', 'i', 'd', 'e');;
+    strcpy((char*)mp4->hdlrv_name, "VideoHandler");
+
+    mp4->minfv_size          = htonl(offsetof(MP4FILE, traka_size) - offsetof(MP4FILE, minfv_size));
+    mp4->minfv_type          = MP4_FOURCC('m', 'i', 'n', 'f');
+    mp4->vmhd_size           = htonl(offsetof(MP4FILE, dinfv_size) - offsetof(MP4FILE, vmhd_size ));
+    mp4->vmhd_type           = MP4_FOURCC('v', 'm', 'h', 'd');
+
+    mp4->dinfv_size          = htonl(offsetof(MP4FILE, stblv_size) - offsetof(MP4FILE, dinfv_size));
+    mp4->dinfv_type          = MP4_FOURCC('d', 'i', 'n', 'f');
+    mp4->drefv_size          = htonl(offsetof(MP4FILE, stblv_size) - offsetof(MP4FILE, drefv_size));
+    mp4->drefv_type          = MP4_FOURCC('d', 'r', 'e', 'f');
+    mp4->urlv_size           = htonl(offsetof(MP4FILE, stblv_size) - offsetof(MP4FILE, urlv_size ));
+    mp4->urlv_type           = MP4_FOURCC('u', 'r', 'l',  0 );
+    mp4->urlv_flags[0]       = 1;
+
+    mp4->stblv_size          = htonl(offsetof(MP4FILE, traka_size) - offsetof(MP4FILE, stblv_size));
+    mp4->stblv_type          = MP4_FOURCC('s', 't', 'b', 'l');
+    mp4->stsdv_size          = htonl(offsetof(MP4FILE, traka_size) - offsetof(MP4FILE, stsdv_size));
+    mp4->stsdv_type          = MP4_FOURCC('s', 't', 's', 'd');
+    mp4->stsdv_entry_count   = 1;
+
+    mp4->avc1_size           = htonl(offsetof(MP4FILE, traka_size) - offsetof(MP4FILE, avc1_size ));
+    mp4->avc1_type           = MP4_FOURCC('a', 'v', 'c', '1');
+    mp4->avc1_data_refidx    = 1;
+    mp4->avc1_width          = w;
+    mp4->avc1_height         = h;
+    mp4->avc1_horiz_res      = 0x480000;
+    mp4->avc1_vert_res       = 0x480000;
+    mp4->avc1_frame_count    = 1;
+    mp4->avc1_depth          = 24;
+    mp4->avc1_predefined     = 0xFFFF;
+
+    memcpy(mp4->avcc_sps_data, sps_data, sps_len);
+    memcpy(mp4->avcc_pps_data, pps_data, pps_len);
+    mp4->avcc_size           = htonl(offsetof(MP4FILE, traka_size) - offsetof(MP4FILE, avcc_size ));
+    mp4->avcc_type           = MP4_FOURCC('a', 'v', 'c', 'C');
+    mp4->avcc_config_ver     = 1;
+    mp4->avcc_avc_profile    = mp4->avcc_sps_data[1];
+    mp4->avcc_profile_compat = mp4->avcc_sps_data[2];
+    mp4->avcc_avc_level      = mp4->avcc_sps_data[3];
+    mp4->avcc_nalulen        = 0xFF;
+    mp4->avcc_sps_num        = (0x7 << 5) | (1 << 0);
+    mp4->avcc_sps_len        = sps_len;
+    mp4->avcc_pps_num        = 1;
+    mp4->avcc_pps_len        = pps_len;
+
+    return mp4;
+}
+
+void mp4muxer_exit(void *ctx)
+{
+    MP4FILE *mp4 = (MP4FILE*)ctx;
+    if (mp4) {
+        if (mp4->fp) fclose(mp4->fp);
+        free(mp4);
+    }
+}
+
+#ifdef _TEST_
+int main(void)
+{
+    return 0;
+}
+#endif
