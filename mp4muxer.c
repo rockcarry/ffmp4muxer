@@ -195,20 +195,28 @@ typedef struct {
     FILE     *fp;
     int       frate;
     int       gop;
+    int       sttsv_off;
     int       chunk_off;
     uint32_t  vpts_last;
     int       frame_max;
     int       syncf_max;
-    int       sttsv_cur;
-    int       stssv_cur;
-    int       stszv_cur;
-    int       stcov_cur;
     uint32_t *sttsv_buf;
     uint32_t *stssv_buf;
     uint32_t *stszv_buf;
     uint32_t *stcov_buf;
 } MP4FILE;
 #pragma pack()
+
+static void write_fixed_moov_data(MP4FILE *mp4)
+{
+    fseek(mp4->fp, mp4->sttsv_off, SEEK_SET);
+    fwrite(&(mp4->sttsv_size), 1, 16, mp4->fp); fwrite(mp4->sttsv_buf, 1, ntohl(mp4->sttsv_size) - 16, mp4->fp);
+    fwrite(&(mp4->stssv_size), 1, 16, mp4->fp); fwrite(mp4->stssv_buf, 1, ntohl(mp4->stssv_size) - 16, mp4->fp);
+    fwrite(&(mp4->stscv_size), 1, ntohl(mp4->stscv_size), mp4->fp);
+    fwrite(&(mp4->stszv_size), 1, 20, mp4->fp); fwrite(mp4->stszv_buf, 1, ntohl(mp4->stszv_size) - 20, mp4->fp);
+    fwrite(&(mp4->stcov_size), 1, 16, mp4->fp); fwrite(mp4->stcov_buf, 1, ntohl(mp4->stcov_size) - 16, mp4->fp);
+    fwrite(&(mp4->mdat_size ), 1, 8 , mp4->fp);
+}
 
 void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration, unsigned char *sps_data, int sps_len, unsigned char *pps_data, int pps_len)
 {
@@ -352,6 +360,11 @@ void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration, 
     mp4->trakv_size         += mp4->mdiav_size;
     mp4->moov_size          += mp4->trakv_size;
 
+    mp4->sttsv_buf           = calloc(1, mp4->sttsv_size - 16);
+    mp4->stssv_buf           = calloc(1, mp4->stssv_size - 16);
+    mp4->stszv_buf           = calloc(1, mp4->stszv_size - 20);
+    mp4->stcov_buf           = calloc(1, mp4->stcov_size - 16);
+
     mp4->sttsv_size          = htonl(mp4->sttsv_size);
     mp4->stssv_size          = htonl(mp4->stssv_size);
     mp4->stscv_size          = htonl(mp4->stscv_size);
@@ -367,24 +380,15 @@ void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration, 
     mp4->trakv_size          = htonl(mp4->trakv_size);
     mp4->moov_size           = htonl(mp4->moov_size );
 
-    mp4->mdat_size           = htonl(0);
+    mp4->mdat_size           = htonl(8);
     mp4->mdat_type           = MP4_FOURCC('m', 'd', 'a', 't');
-
-    mp4->sttsv_buf           = calloc(1, mp4->sttsv_size - 16);
-    mp4->stssv_buf           = calloc(1, mp4->stssv_size - 16);
-    mp4->stszv_buf           = calloc(1, mp4->stszv_size - 20);
-    mp4->stcov_buf           = calloc(1, mp4->stcov_size - 16);
 
     fwrite(mp4, 1, offsetof(MP4FILE, avcc_sps_data), mp4->fp);
     fwrite(mp4->avcc_sps_data, 1, ntohl(mp4->avcc_sps_len << 16), mp4->fp);
     fwrite(&(mp4->avcc_pps_num), 1, 3 , mp4->fp);
     fwrite(mp4->avcc_pps_data, 1, ntohl(mp4->avcc_pps_len << 16), mp4->fp);
-    fwrite(&(mp4->sttsv_size  ), 1, 16, mp4->fp); fseek(mp4->fp, ntohl(mp4->sttsv_size) - 16, SEEK_CUR);
-    fwrite(&(mp4->stssv_size  ), 1, 16, mp4->fp); fseek(mp4->fp, ntohl(mp4->stssv_size) - 16, SEEK_CUR);
-    fwrite(&(mp4->stscv_size  ), 1, 16 + ntohl(mp4->stscv_size), mp4->fp);
-    fwrite(&(mp4->stszv_size  ), 1, 20, mp4->fp); fseek(mp4->fp, ntohl(mp4->stszv_size) - 20, SEEK_CUR);
-    fwrite(&(mp4->stcov_size  ), 1, 16, mp4->fp); fseek(mp4->fp, ntohl(mp4->stcov_size) - 16, SEEK_CUR);
-    fwrite(&(mp4->mdat_size   ), 1, ntohl(mp4->mdat_size), mp4->fp);
+    mp4->sttsv_off = ftell(mp4->fp);
+    write_fixed_moov_data(mp4);
     mp4->chunk_off = ftell(mp4->fp);
     return mp4;
 }
@@ -393,7 +397,8 @@ void mp4muxer_exit(void *ctx)
 {
     MP4FILE *mp4 = (MP4FILE*)ctx;
     if (mp4) {
-        if (mp4->fp) fclose(mp4->fp);
+        write_fixed_moov_data(mp4);
+        fclose(mp4->fp);
         if (mp4->sttsv_buf) free(mp4->sttsv_buf);
         if (mp4->stssv_buf) free(mp4->stssv_buf);
         if (mp4->stszv_buf) free(mp4->stszv_buf);
@@ -464,32 +469,37 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len, unsigned pts)
     MP4FILE *mp4 = (MP4FILE*)ctx;
     if (!ctx) return;
 
-    if (mp4->stssv_buf && mp4->stssv_cur < mp4->syncf_max && is_h264_key_frame(buf, len)) {
-        mp4->stssv_buf[mp4->stssv_cur++] = mp4->stszv_cur;
+    if (mp4->stssv_buf && ntohl(mp4->stssv_count) < mp4->syncf_max && is_h264_key_frame(buf, len)) {
+        mp4->stssv_buf[ntohl(mp4->stssv_count)] = mp4->stszv_count;
+        mp4->stssv_count = htonl(ntohl(mp4->stssv_count) + 1);
     }
 
 #if VIDEO_TIMESCALE_BY_FRAME_RATE
     if (mp4->sttsv_buf) {
-        mp4->sttsv_buf[mp4->sttsv_cur + 0] = mp4->stszv_cur + 1;
-        mp4->sttsv_buf[mp4->sttsv_cur + 1] = 1;
+        mp4->sttsv_buf[0] = htonl(ntohl(mp4->stszv_count) + 1);
+        mp4->sttsv_buf[1] = htonl(1);
+        mp4->sttsv_count  = htonl(1);
     }
 #else
-    if (mp4->sttsv_buf && mp4->sttsv_cur < mp4->frame_max) {
-        mp4->sttsv_buf[mp4->sttsv_cur * 2 + 0] = 1;
-        mp4->sttsv_buf[mp4->sttsv_cur * 2 + 1] = mp4->vpts_last ? pts - mp4->vpts_last : 1000 / mp4->frate;
-        mp4->sttsv_cur ++;
+    if (mp4->sttsv_buf && ntohl(mp4->sttsv_count) < mp4->frame_max) {
+        mp4->sttsv_buf[ntohl(mp4->sttsv_count) * 2 + 0] = htonl(1);
+        mp4->sttsv_buf[ntohl(mp4->sttsv_count) * 2 + 1] = htonl(mp4->vpts_last ? pts - mp4->vpts_last : 1000 / mp4->frate);
+        mp4->sttsv_count = htonl(ntohl(mp4->sttsv_count) + 1);
         mp4->vpts_last = pts;
     }
 #endif
 
-    if (mp4->stszv_buf && mp4->stszv_cur < mp4->frame_max) {
-        mp4->stszv_buf[mp4->stszv_cur++] = len;
+    if (mp4->stszv_buf && ntohl(mp4->stszv_count) < mp4->frame_max) {
+        mp4->stszv_buf[ntohl(mp4->stszv_count)] = htonl(len);
+        mp4->stszv_count = htonl(ntohl(mp4->stszv_count) + 1);
     }
 
-    if (mp4->stcov_buf && mp4->stcov_cur < mp4->frame_max) {
-        mp4->stcov_buf[mp4->stcov_cur++] = mp4->chunk_off;
+    if (mp4->stcov_buf && ntohl(mp4->stcov_count) < mp4->frame_max) {
+        mp4->stcov_buf[ntohl(mp4->stcov_count)] = htonl(mp4->chunk_off);
+        mp4->stcov_count = htonl(ntohl(mp4->stcov_count) + 1);
     }
 
+    mp4->mdat_size += htonl(ntohl(mp4->mdat_size) + len);
     mp4->chunk_off += len;
     fwrite(buf, 1, len, mp4->fp);
 }
