@@ -12,6 +12,9 @@
 #ifndef offsetof
 #define offsetof(type, member) ((size_t)&((type*)0)->member)
 #endif
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
 #define MP4_FOURCC(a, b, c, d)  (((a) << 0) | ((b) << 8) | ((c) << 16) | ((d) << 24))
 
 #define VIDEO_TIMESCALE_BY_FRAME_RATE  1
@@ -148,10 +151,10 @@ typedef struct {
     uint8_t   avcc_nalulen;
     uint8_t   avcc_sps_num;
     uint16_t  avcc_sps_len;
-    uint8_t   avcc_sps_data[256];
+    uint8_t   avcc_sps_data[16];
     uint8_t   avcc_pps_num;
     uint16_t  avcc_pps_len;
-    uint8_t   avcc_pps_data[256];
+    uint8_t   avcc_pps_data[16];
 
     uint32_t  sttsv_size;
     uint32_t  sttsv_type;
@@ -311,8 +314,8 @@ void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration, 
     mp4->avc1_depth          = htonl(24) >> 16;
     mp4->avc1_predefined     = 0xFFFF;
 
-    memcpy(mp4->avcc_sps_data, sps_data, sps_len);
-    memcpy(mp4->avcc_pps_data, pps_data, pps_len);
+    memcpy(mp4->avcc_sps_data, sps_data, MIN(sps_len, sizeof(mp4->avcc_sps_data)));
+    memcpy(mp4->avcc_pps_data, pps_data, MIN(pps_len, sizeof(mp4->avcc_pps_data)));
     mp4->avcc_size           = offsetof(MP4FILE, sttsv_size) - offsetof(MP4FILE, avcc_size) + sps_len + pps_len - sizeof(mp4->avcc_sps_data) - sizeof(mp4->avcc_pps_data);
     mp4->avcc_type           = MP4_FOURCC('a', 'v', 'c', 'C');
     mp4->avcc_config_ver     = 1;
