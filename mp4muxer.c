@@ -9,6 +9,78 @@
 #endif
 #include "mp4muxer.h"
 
+static int h264_parse_nalu_header(uint8_t *data, int len, int *hdrsize)
+{
+    int  i;
+    for (i=0; i<4 && i<len && !data[i]; i++);
+    if (i < 2 || i == 4 || data[i] != 0x01 || ++i >= len) {
+        printf("failed to find h264 frame data[%d] = %02x !\n", i, data[i]);
+        return -1;
+    }
+    *hdrsize = i;
+    return data[i] & 0x1f;
+}
+
+int h264_parse_key_sps_pps(uint8_t *data, int len, int *key, uint8_t **sps_buf, int *sps_len, uint8_t **pps_buf, int *pps_len)
+{
+    int i, last, type, hdrsize;
+    uint8_t *sbuf, *pbuf;
+    int      slen,  plen;
+
+#if 0
+    printf("%02x %02x %02x %02x %02x %02x %02x %02x\n", data[0 ], data[1 ], data[2 ], data[3 ], data[4 ], data[5 ], data[6 ], data[7 ]);
+    printf("%02x %02x %02x %02x %02x %02x %02x %02x\n", data[8 ], data[9 ], data[10], data[11], data[12], data[13], data[14], data[15]);
+    printf("%02x %02x %02x %02x %02x %02x %02x %02x\n", data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23]);
+    printf("%02x %02x %02x %02x %02x %02x %02x %02x\n", data[24], data[25], data[26], data[27], data[28], data[29], data[30], data[31]);
+#endif
+
+    if (key    ) *key     = 0;
+    if (sps_buf) *sps_buf = NULL;
+    if (sps_len) *sps_len = 0;
+    if (pps_buf) *pps_buf = NULL;
+    if (pps_len) *pps_len = 0;
+    type = h264_parse_nalu_header(data, len, &hdrsize);
+    if (type == -1) return 0;
+    data += hdrsize;
+    len  -= hdrsize;
+
+    if (type == 7) { // get sps
+        for (i=0,last=1; i<len && (last || data[i]); last=data[i],i++);
+        sbuf  = data;
+        slen  = i-1;
+        data += i-1;
+        len  -= i-1;
+
+        type = h264_parse_nalu_header(data, len, &hdrsize);
+        if (type == -1) return 0;
+        data += hdrsize;
+        len  -= hdrsize;
+
+        if (type == 8) {
+            for (i=0,last=1; i<len && (last || data[i]); last=data[i],i++);
+            pbuf  = data;
+            plen  = i-1;
+            data += i-1;
+            len  -= i-1;
+        } else {
+            printf("not pps data !\n");
+            return 0;
+        }
+
+        if (sps_buf) *sps_buf = sbuf;
+        if (sps_len) *sps_len = slen;
+        if (pps_buf) *pps_buf = pbuf;
+        if (pps_len) *pps_len = plen;
+
+        type = h264_parse_nalu_header(data, len, &hdrsize);
+        if (type == -1) return 0;
+        data += hdrsize;
+        len  -= hdrsize;
+        if (key) *key = 1;
+    }
+    return len;
+}
+
 #ifndef offsetof
 #define offsetof(type, member) ((size_t)&((type*)0)->member)
 #endif
@@ -154,7 +226,7 @@ typedef struct {
     uint8_t   avcc_sps_data[16];
     uint8_t   avcc_pps_num;
     uint16_t  avcc_pps_len;
-    uint8_t   avcc_pps_data[16];
+    uint8_t   avcc_pps_data[15];
 
     uint32_t  sttsv_size;
     uint32_t  sttsv_type;
@@ -198,7 +270,7 @@ typedef struct {
     FILE     *fp;
     int       frate;
     int       gop;
-    int       sttsv_off;
+    int       fffix_off;
     int       chunk_off;
     uint32_t  vpts_last;
     int       frame_max;
@@ -212,16 +284,17 @@ typedef struct {
 
 static void write_fixed_moov_data(MP4FILE *mp4)
 {
-    fseek(mp4->fp, mp4->sttsv_off, SEEK_SET);
-    fwrite(&(mp4->sttsv_size), 1, 16, mp4->fp); fwrite(mp4->sttsv_buf, 1, ntohl(mp4->sttsv_size) - 16, mp4->fp);
-    fwrite(&(mp4->stssv_size), 1, 16, mp4->fp); fwrite(mp4->stssv_buf, 1, ntohl(mp4->stssv_size) - 16, mp4->fp);
-    fwrite(&(mp4->stscv_size), 1, ntohl(mp4->stscv_size), mp4->fp);
-    fwrite(&(mp4->stszv_size), 1, 20, mp4->fp); fwrite(mp4->stszv_buf, 1, ntohl(mp4->stszv_size) - 20, mp4->fp);
-    fwrite(&(mp4->stcov_size), 1, 16, mp4->fp); fwrite(mp4->stcov_buf, 1, ntohl(mp4->stcov_size) - 16, mp4->fp);
-    fwrite(&(mp4->mdat_size ), 1, 8 , mp4->fp);
+    fseek(mp4->fp, mp4->fffix_off, SEEK_SET);
+    fwrite(&mp4->sttsv_size, 1, 16, mp4->fp); fwrite(mp4->sttsv_buf, 1, ntohl(mp4->sttsv_size) - 16, mp4->fp);
+    fwrite(&mp4->stssv_size, 1, 16, mp4->fp); fwrite(mp4->stssv_buf, 1, ntohl(mp4->stssv_size) - 16, mp4->fp);
+    fwrite(&mp4->stscv_size, 1, ntohl(mp4->stscv_size), mp4->fp);
+    fwrite(&mp4->stszv_size, 1, 20, mp4->fp); fwrite(mp4->stszv_buf, 1, ntohl(mp4->stszv_size) - 20, mp4->fp);
+    fwrite(&mp4->stcov_size, 1, 16, mp4->fp); fwrite(mp4->stcov_buf, 1, ntohl(mp4->stcov_size) - 16, mp4->fp);
+    fwrite(&mp4->mdat_size , 1, 8 , mp4->fp);
+    fseek(mp4->fp, 0, SEEK_END);
 }
 
-void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration, unsigned char *sps_data, int sps_len, unsigned char *pps_data, int pps_len)
+void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration)
 {
     MP4FILE *mp4 = calloc(1, sizeof(MP4FILE));
     if (!mp4) return NULL;
@@ -236,7 +309,7 @@ void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration, 
     mp4->ftyp_size           = htonl(offsetof(MP4FILE, moov_size ) - offsetof(MP4FILE, ftyp_size));
     mp4->ftyp_type           = MP4_FOURCC('f', 't', 'y', 'p');
     mp4->ftyp_brand          = MP4_FOURCC('i', 's', 'o', 'm');
-    mp4->ftyp_version        = htonl(256);
+    mp4->ftyp_version        = htonl(512);
     mp4->ftyp_compat1        = MP4_FOURCC('i', 's', 'o', 'm');
     mp4->ftyp_compat2        = MP4_FOURCC('i', 's', 'o', '2');
     mp4->ftyp_compat3        = MP4_FOURCC('m', 'p', '4', '1');
@@ -258,7 +331,7 @@ void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration, 
     mp4->trakv_type          = MP4_FOURCC('t', 'r', 'a', 'k');
     mp4->tkhdv_size          = htonl(offsetof(MP4FILE, mdiav_size) - offsetof(MP4FILE, tkhdv_size));
     mp4->tkhdv_type          = MP4_FOURCC('t', 'k', 'h', 'd');
-    mp4->tkhdv_flags[2]      = 0x7;
+    mp4->tkhdv_flags[2]      = 0xF;
     mp4->tkhdv_trackid       = htonl(1         );
     mp4->tkhdv_duration      = htonl(duration  );
     mp4->tkhdv_matrix[0]     = htonl(0x00010000);
@@ -276,7 +349,7 @@ void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration, 
 #else
     mp4->mdhdv_timescale     = htonl(1000 );
 #endif
-    mp4->mdhdv_duration      = htonl(duration);
+    mp4->mdhdv_duration      = htonl(duration * frate / 1000);
     mp4->hdlrv_size          = htonl(offsetof(MP4FILE, minfv_size) - offsetof(MP4FILE, hdlrv_size));
     mp4->hdlrv_type          = MP4_FOURCC('h', 'd', 'l', 'r');
     mp4->hdlrv_handler_type  = MP4_FOURCC('v', 'i', 'd', 'e');;
@@ -314,9 +387,7 @@ void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration, 
     mp4->avc1_depth          = htonl(24) >> 16;
     mp4->avc1_predefined     = 0xFFFF;
 
-    memcpy(mp4->avcc_sps_data, sps_data, MIN(sps_len, sizeof(mp4->avcc_sps_data)));
-    memcpy(mp4->avcc_pps_data, pps_data, MIN(pps_len, sizeof(mp4->avcc_pps_data)));
-    mp4->avcc_size           = offsetof(MP4FILE, sttsv_size) - offsetof(MP4FILE, avcc_size) + sps_len + pps_len - sizeof(mp4->avcc_sps_data) - sizeof(mp4->avcc_pps_data);
+    mp4->avcc_size           = offsetof(MP4FILE, sttsv_size) - offsetof(MP4FILE, avcc_size);
     mp4->avcc_type           = MP4_FOURCC('a', 'v', 'c', 'C');
     mp4->avcc_config_ver     = 1;
     mp4->avcc_avc_profile    = mp4->avcc_sps_data[1];
@@ -324,9 +395,9 @@ void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration, 
     mp4->avcc_avc_level      = mp4->avcc_sps_data[3];
     mp4->avcc_nalulen        = 0xFF;
     mp4->avcc_sps_num        = (0x7 << 5) | (1 << 0);
-    mp4->avcc_sps_len        = htonl(sps_len) >> 16;
+    mp4->avcc_sps_len        = htonl(sizeof(mp4->avcc_sps_data)) >> 16;
     mp4->avcc_pps_num        = 1;
-    mp4->avcc_pps_len        = htonl(pps_len) >> 16;
+    mp4->avcc_pps_len        = htonl(sizeof(mp4->avcc_pps_data)) >> 16;
 
     mp4->frame_max           = duration * frate / 1000 + frate / 2;
     mp4->syncf_max           = mp4->frame_max / mp4->gop;
@@ -386,13 +457,12 @@ void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration, 
     mp4->mdat_size           = htonl(8);
     mp4->mdat_type           = MP4_FOURCC('m', 'd', 'a', 't');
 
-    fwrite(mp4, 1, offsetof(MP4FILE, avcc_sps_data), mp4->fp);
-    fwrite(mp4->avcc_sps_data, 1, ntohl(mp4->avcc_sps_len << 16), mp4->fp);
-    fwrite(&(mp4->avcc_pps_num), 1, 3 , mp4->fp);
-    fwrite(mp4->avcc_pps_data, 1, ntohl(mp4->avcc_pps_len << 16), mp4->fp);
-    mp4->sttsv_off = ftell(mp4->fp);
+    fwrite(mp4, 1, offsetof(MP4FILE, sttsv_size), mp4->fp);
+    mp4->fffix_off = ftell(mp4->fp);
     write_fixed_moov_data(mp4);
     mp4->chunk_off = ftell(mp4->fp);
+    mp4->avcc_sps_len = 0;
+    mp4->avcc_pps_len = 0;
     return mp4;
 }
 
@@ -410,76 +480,35 @@ void mp4muxer_exit(void *ctx)
     }
 }
 
-static int parse_h264_nalu_header(uint8_t *data, int len, int *hdrsize)
-{
-    int  i;
-    for (i=0; i<4 && i<len && !data[i]; i++);
-    if (i < 2 || i == 4 || data[i] != 0x01 || ++i >= len) {
-        printf("failed to find h264 frame data[%d] = %02x !\n", i, data[i]);
-        return -1;
-    }
-    *hdrsize = i;
-    return data[i] & 0x1f;
-}
-
-static int is_h264_key_frame(uint8_t *data, int len)
-{
-    int i, last, type, hdrsize, key = 0;
-
-#if 0
-    printf("%02x %02x %02x %02x %02x %02x %02x %02x\n", data[0 ], data[1 ], data[2 ], data[3 ], data[4 ], data[5 ], data[6 ], data[7 ]);
-    printf("%02x %02x %02x %02x %02x %02x %02x %02x\n", data[8 ], data[9 ], data[10], data[11], data[12], data[13], data[14], data[15]);
-    printf("%02x %02x %02x %02x %02x %02x %02x %02x\n", data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23]);
-    printf("%02x %02x %02x %02x %02x %02x %02x %02x\n", data[24], data[25], data[26], data[27], data[28], data[29], data[30], data[31]);
-#endif
-
-    type = parse_h264_nalu_header(data, len, &hdrsize);
-    if (type == -1) return key;
-    data += hdrsize;
-    len  -= hdrsize;
-
-    if (type == 7) {
-        for (i=0,last=1; i<len && (last || data[i]); last=data[i],i++);
-        data += i;
-        len  -= i;
-
-        type = parse_h264_nalu_header(data, len, &hdrsize);
-        if (type == -1) return key;
-        data += hdrsize;
-        len  -= hdrsize;
-
-        if (type == 8) {
-            for (i=0,last=1; i<len && (last || data[i]); last=data[i],i++);
-            data += i;
-            len  -= i;
-        } else {
-            printf("not pps data !\n");
-            return key;
-        }
-
-        type = parse_h264_nalu_header(data, len, &hdrsize);
-        if (type == -1) return key;
-        data += hdrsize;
-        len  -= hdrsize;
-        key   = 1;
-    }
-
-    return key;
-}
-
-void mp4muxer_video(void *ctx, unsigned char *buf, int len, unsigned pts)
+void mp4muxer_video(void *ctx, unsigned char *buf, int len)
 {
     MP4FILE *mp4 = (MP4FILE*)ctx;
+    int      key = 0, newlen;
+    uint8_t *spsbuf, *ppsbuf;
+    int      spslen,  ppslen;
     if (!ctx) return;
 
-    if (mp4->stssv_buf && ntohl(mp4->stssv_count) < mp4->syncf_max && is_h264_key_frame(buf, len)) {
+    newlen = h264_parse_key_sps_pps(buf, len, &key, &spsbuf, &spslen, &ppsbuf, &ppslen);
+    if (!newlen) return;
+    buf += len - newlen;
+    len  = newlen;
+
+    if (!mp4->avcc_sps_len && spslen) mp4muxer_spspps(mp4, spsbuf, spslen, NULL, 0);
+    if (!mp4->avcc_pps_len && ppslen) mp4muxer_spspps(mp4, NULL, 0, ppsbuf, ppslen);
+
+    if (mp4->stszv_buf && ntohl(mp4->stszv_count) < mp4->frame_max) {
+        mp4->stszv_buf[ntohl(mp4->stszv_count)] = htonl(len);
+        mp4->stszv_count = htonl(ntohl(mp4->stszv_count) + 1);
+    }
+
+    if (mp4->stssv_buf && ntohl(mp4->stssv_count) < mp4->syncf_max && key) {
         mp4->stssv_buf[ntohl(mp4->stssv_count)] = mp4->stszv_count;
         mp4->stssv_count = htonl(ntohl(mp4->stssv_count) + 1);
     }
 
 #if VIDEO_TIMESCALE_BY_FRAME_RATE
     if (mp4->sttsv_buf) {
-        mp4->sttsv_buf[0] = htonl(ntohl(mp4->stszv_count) + 1);
+        mp4->sttsv_buf[0] = mp4->stszv_count;
         mp4->sttsv_buf[1] = htonl(1);
         mp4->sttsv_count  = htonl(1);
     }
@@ -492,25 +521,46 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len, unsigned pts)
     }
 #endif
 
-    if (mp4->stszv_buf && ntohl(mp4->stszv_count) < mp4->frame_max) {
-        mp4->stszv_buf[ntohl(mp4->stszv_count)] = htonl(len);
-        mp4->stszv_count = htonl(ntohl(mp4->stszv_count) + 1);
-    }
 
     if (mp4->stcov_buf && ntohl(mp4->stcov_count) < mp4->frame_max) {
         mp4->stcov_buf[ntohl(mp4->stcov_count)] = htonl(mp4->chunk_off);
         mp4->stcov_count = htonl(ntohl(mp4->stcov_count) + 1);
     }
 
-    mp4->mdat_size += htonl(ntohl(mp4->mdat_size) + len);
-    mp4->chunk_off += len;
+    mp4->mdat_size = htonl(ntohl(mp4->mdat_size) + len);
+    mp4->chunk_off+= len;
     fwrite(buf, 1, len, mp4->fp);
 }
 
-void mp4muxer_audio(void *ctx, unsigned char *buf, int len, unsigned pts)
+void mp4muxer_audio(void *ctx, unsigned char *buf, int len)
 {
     MP4FILE *mp4 = (MP4FILE*)ctx;
     if (!ctx) return;
+}
+
+void mp4muxer_spspps(void *ctx, uint8_t *spsbuf, int spslen, uint8_t *ppsbuf, int ppslen)
+{
+    MP4FILE *mp4 = (MP4FILE*)ctx;
+    if (!ctx) return;
+    if (spsbuf && spslen) {
+        mp4->avcc_sps_len = spslen < sizeof(mp4->avcc_sps_data) ? spslen : sizeof(mp4->avcc_sps_data);
+        memcpy(mp4->avcc_sps_data, spsbuf, mp4->avcc_sps_len);
+        mp4->avcc_sps_len = htonl(mp4->avcc_sps_len) >> 16;
+        mp4->avcc_avc_profile    = mp4->avcc_sps_data[1];
+        mp4->avcc_profile_compat = mp4->avcc_sps_data[2];
+        mp4->avcc_avc_level      = mp4->avcc_sps_data[3];
+        fseek(mp4->fp, offsetof(MP4FILE, avcc_avc_profile), SEEK_SET);
+        fwrite(&mp4->avcc_avc_profile, 1, 3, mp4->fp);
+        fseek(mp4->fp, offsetof(MP4FILE, avcc_sps_len), SEEK_SET);
+        fwrite(&mp4->avcc_sps_len, 1, 2 , mp4->fp); fwrite(mp4->avcc_sps_data, 1, ntohl(mp4->avcc_sps_len << 16), mp4->fp);
+    }
+    if (ppsbuf && ppslen) {
+        mp4->avcc_pps_len = ppslen < sizeof(mp4->avcc_pps_data) ? ppslen : sizeof(mp4->avcc_pps_data);
+        memcpy(mp4->avcc_pps_data, ppsbuf, mp4->avcc_pps_len);
+        mp4->avcc_pps_len = htonl(mp4->avcc_pps_len) >> 16;
+        fseek(mp4->fp, offsetof(MP4FILE, avcc_sps_data) + ntohl(mp4->avcc_sps_len << 16), SEEK_SET);
+        fwrite(&mp4->avcc_pps_num, 1, 3 , mp4->fp); fwrite(mp4->avcc_pps_data, 1, ntohl(mp4->avcc_pps_len << 16), mp4->fp);
+    }
 }
 
 #ifdef _TEST_
@@ -518,7 +568,8 @@ int main(void)
 {
     uint8_t sps[] = { 103,77,0,40,229,64,60,1,19,242,160 };
     uint8_t pps[] = { 104,238,49,18 };
-    void *mp4 = mp4muxer_init("test.mp4", 1920, 1080, 25, 50, 60000, sps, sizeof(sps), pps, sizeof(pps));
+    void *mp4 = mp4muxer_init("test.mp4", 1920, 1080, 25, 50, 60000);
+    mp4muxer_spspps(mp4, sps, sizeof(sps), pps, sizeof(pps));
     mp4muxer_exit(mp4);
     return 0;
 }
