@@ -553,6 +553,7 @@ void mp4muxer_spspps(void *ctx, uint8_t *spsbuf, int spslen, uint8_t *ppsbuf, in
         fwrite(&mp4->avcc_avc_profile, 1, 3, mp4->fp);
         fseek(mp4->fp, offsetof(MP4FILE, avcc_sps_len), SEEK_SET);
         fwrite(&mp4->avcc_sps_len, 1, 2 , mp4->fp); fwrite(mp4->avcc_sps_data, 1, ntohl(mp4->avcc_sps_len << 16), mp4->fp);
+        fseek(mp4->fp, 0, SEEK_END);
     }
     if (ppsbuf && ppslen) {
         mp4->avcc_pps_len = ppslen < sizeof(mp4->avcc_pps_data) ? ppslen : sizeof(mp4->avcc_pps_data);
@@ -560,6 +561,7 @@ void mp4muxer_spspps(void *ctx, uint8_t *spsbuf, int spslen, uint8_t *ppsbuf, in
         mp4->avcc_pps_len = htonl(mp4->avcc_pps_len) >> 16;
         fseek(mp4->fp, offsetof(MP4FILE, avcc_sps_data) + ntohl(mp4->avcc_sps_len << 16), SEEK_SET);
         fwrite(&mp4->avcc_pps_num, 1, 3 , mp4->fp); fwrite(mp4->avcc_pps_data, 1, ntohl(mp4->avcc_pps_len << 16), mp4->fp);
+        fseek(mp4->fp, 0, SEEK_END);
     }
 }
 
