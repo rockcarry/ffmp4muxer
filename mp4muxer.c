@@ -56,7 +56,7 @@ int h264_parse_key_sps_pps(uint8_t *data, int len, int *key, uint8_t **sps_buf, 
         data += hdrsize;
         len  -= hdrsize;
 
-        if (type == 8) {
+        if (type == 8) { // get pps
             for (i=0,last=1; i<len && (last || data[i]); last=data[i],i++);
             pbuf  = data;
             plen  = i-1;
@@ -483,16 +483,12 @@ void mp4muxer_exit(void *ctx)
 void mp4muxer_video(void *ctx, unsigned char *buf, int len)
 {
     MP4FILE *mp4 = (MP4FILE*)ctx;
-    int      key = 0, newlen;
+    int      key = 0;
     uint8_t *spsbuf, *ppsbuf;
     int      spslen,  ppslen;
     if (!ctx) return;
 
-    newlen = h264_parse_key_sps_pps(buf, len, &key, &spsbuf, &spslen, &ppsbuf, &ppslen);
-    if (!newlen) return;
-    buf += len - newlen;
-    len  = newlen;
-
+    if (!h264_parse_key_sps_pps(buf, len, &key, &spsbuf, &spslen, &ppsbuf, &ppslen)) return;
     if (!mp4->avcc_sps_len && spslen) mp4muxer_spspps(mp4, spsbuf, spslen, NULL, 0);
     if (!mp4->avcc_pps_len && ppslen) mp4muxer_spspps(mp4, NULL, 0, ppsbuf, ppslen);
 
@@ -520,7 +516,6 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len)
         mp4->vpts_last = pts;
     }
 #endif
-
 
     if (mp4->stcov_buf && ntohl(mp4->stcov_count) < mp4->frame_max) {
         mp4->stcov_buf[ntohl(mp4->stcov_count)] = htonl(mp4->chunk_off);
