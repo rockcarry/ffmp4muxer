@@ -90,6 +90,7 @@ int h264_parse_key_sps_pps(uint8_t *data, int len, int *key, uint8_t **sps_buf, 
 #define MP4_FOURCC(a, b, c, d)  (((a) << 0) | ((b) << 8) | ((c) << 16) | ((d) << 24))
 
 #define VIDEO_TIMESCALE_BY_FRAME_RATE  1
+#define AUDIO_TIMESCALE_BY_FRAME_RATE  1
 
 #pragma pack(1)
 typedef struct {
@@ -119,6 +120,7 @@ typedef struct {
     uint8_t   mvhd_predefined[24];
     uint32_t  mvhd_next_trackid;
 
+    // video track
     uint32_t  trakv_size;
     uint32_t  trakv_type;
 
@@ -262,6 +264,146 @@ typedef struct {
     uint8_t   stcov_flags[3];
     uint32_t  stcov_count;
 
+    // audio track
+    uint32_t  traka_size;
+    uint32_t  traka_type;
+
+    uint32_t  tkhda_size;
+    uint32_t  tkhda_type;
+    uint8_t   tkhda_version;
+    uint8_t   tkhda_flags[3];
+    uint32_t  tkhda_create_time;
+    uint32_t  tkhda_modify_time;
+    uint32_t  tkhda_trackid;
+    uint32_t  tkhda_reserved1;
+    uint32_t  tkhda_duration;
+    uint32_t  tkhda_reserved2;
+    uint32_t  tkhda_reserved3;
+    uint16_t  tkhda_layer;
+    uint16_t  tkhda_alternate_group;
+    uint16_t  tkhda_volume;
+    uint16_t  tkhda_reserved4;
+    uint32_t  tkhda_matrix[9];
+    uint32_t  tkhda_width;
+    uint32_t  tkhda_height;
+
+    uint32_t  mdiaa_size;
+    uint32_t  mdiaa_type;
+
+    uint32_t  mdhda_size;
+    uint32_t  mdhda_type;
+    uint8_t   mdhda_version;
+    uint8_t   mdhda_flags[3];
+    uint32_t  mdhda_create_time;
+    uint32_t  mdhda_modify_time;
+    uint32_t  mdhda_timescale;
+    uint32_t  mdhda_duration;
+    uint16_t  mdhda_language;
+    uint16_t  mdhda_predefined;
+
+    uint32_t  hdlra_size;
+    uint32_t  hdlra_type;
+    uint8_t   hdlra_version;
+    uint8_t   hdlra_flags[3];
+    uint8_t   hdlra_predefined[4];
+    uint32_t  hdlra_handler_type;
+    uint8_t   hdlra_reserved[12];
+    uint8_t   hdlra_name[16];
+
+    uint32_t  minfa_size;
+    uint32_t  minfa_type;
+
+    uint32_t  smhda_size;
+    uint32_t  smhda_type;
+    uint8_t   smhda_version;
+    uint8_t   smhda_flags[3];
+    uint16_t  smhda_balance;
+    uint16_t  smhda_reserved;
+
+    uint32_t  dinfa_size;
+    uint32_t  dinfa_type;
+
+    uint32_t  drefa_size;
+    uint32_t  drefa_type;
+    uint8_t   drefa_version;
+    uint8_t   drefa_flags[3];
+    uint32_t  drefa_entry_count;
+
+    uint32_t  urla_size;
+    uint32_t  urla_type;
+    uint8_t   urla_version;
+    uint8_t   urla_flags[3];
+
+    uint32_t  stbla_size;
+    uint32_t  stbla_type;
+
+    uint32_t  stsda_size;
+    uint32_t  stsda_type;
+    uint8_t   stsda_version;
+    uint8_t   stsda_flags[3];
+    uint32_t  stsda_entry_count;
+
+    uint32_t  mp4a_size;
+    uint32_t  mp4a_type;
+    uint8_t   mp4a_reserved1[6];
+    uint16_t  mp4a_data_refidx;
+    uint32_t  mp4a_reserved2[2];
+    uint16_t  mp4a_channel_num;
+    uint16_t  mp4a_sample_size;
+    uint16_t  mp4a_predefined1;
+    uint16_t  mp4a_reserved3;
+    uint32_t  mp4a_sample_rate;
+
+    uint32_t  esds_size;
+    uint32_t  esds_type;
+    uint8_t   esds_version;
+    uint8_t   esds_flags[3];
+    uint8_t   esds_esdesc_tag;    // 0x03
+    uint16_t  esds_esdesc_len;    // ((25 << 8) | 0x80)
+    uint16_t  esds_esdesc_id;     // 0x0200
+    uint8_t   esds_esdesc_flags;  // 0x00
+    uint8_t   esds_deccfg_tag;    // 0x04
+    uint8_t   esds_deccfg_len;    // 17
+    uint8_t   esds_deccfg_object; // 0x40 - aac
+    uint8_t   esds_deccfg_stream; // 0x15
+    uint8_t   esds_deccfg_buffer_size[3];
+    uint32_t  esds_deccfg_max_bitrate;
+    uint32_t  esds_deccfg_avg_bitrate;
+    uint8_t   esds_decspec_tag;   // 0x05
+    uint8_t   esds_decspec_len;   // 2
+    uint16_t  esds_decspec_info;
+    uint8_t   esds_slcfg_tag;     // 0x06
+    uint8_t   esds_slcfg_len;     // 1
+    uint8_t   esds_slcfg_reserved;// 0x02
+
+    uint32_t  sttsa_size;
+    uint32_t  sttsa_type;
+    uint8_t   sttsa_version;
+    uint8_t   sttsa_flags[3];
+    uint32_t  sttsa_count;
+
+    uint32_t  stsca_size;
+    uint32_t  stsca_type;
+    uint8_t   stsca_version;
+    uint8_t   stsca_flags[3];
+    uint32_t  stsca_count;
+    uint32_t  stsca_first_chunk;
+    uint32_t  stsca_samp_per_chunk;
+    uint32_t  stsca_samp_desc_id;
+
+    uint32_t  stsza_size;
+    uint32_t  stsza_type;
+    uint8_t   stsza_version;
+    uint8_t   stsza_flags[3];
+    uint32_t  stsza_sample_size;
+    uint32_t  stsza_count;
+
+    uint32_t  stcoa_size;
+    uint32_t  stcoa_type;
+    uint8_t   stcoa_version;
+    uint8_t   stcoa_flags[3];
+    uint32_t  stcoa_count;
+
     // mdat box
     uint32_t  mdat_size;
     uint32_t  mdat_type;
@@ -270,7 +412,9 @@ typedef struct {
     FILE     *fp;
     int       frate;
     int       gop;
-    int       fffix_off;
+    int       sampnum;
+    int       fixtv_off;
+    int       fixta_off;
     int       chunk_off;
     uint32_t  vpts_last;
     int       frame_max;
@@ -279,28 +423,43 @@ typedef struct {
     uint32_t *stssv_buf;
     uint32_t *stszv_buf;
     uint32_t *stcov_buf;
+    uint32_t *sttsa_buf;
+    uint32_t *stsza_buf;
+    uint32_t *stcoa_buf;
 } MP4FILE;
 #pragma pack()
 
-static void write_fixed_moov_data(MP4FILE *mp4)
+static void write_fixed_trackv_data(MP4FILE *mp4)
 {
-    fseek(mp4->fp, mp4->fffix_off, SEEK_SET);
+    fseek(mp4->fp, mp4->fixtv_off, SEEK_SET);
     fwrite(&mp4->sttsv_size, 1, 16, mp4->fp); fwrite(mp4->sttsv_buf, 1, ntohl(mp4->sttsv_size) - 16, mp4->fp);
     fwrite(&mp4->stssv_size, 1, 16, mp4->fp); fwrite(mp4->stssv_buf, 1, ntohl(mp4->stssv_size) - 16, mp4->fp);
     fwrite(&mp4->stscv_size, 1, ntohl(mp4->stscv_size), mp4->fp);
     fwrite(&mp4->stszv_size, 1, 20, mp4->fp); fwrite(mp4->stszv_buf, 1, ntohl(mp4->stszv_size) - 20, mp4->fp);
     fwrite(&mp4->stcov_size, 1, 16, mp4->fp); fwrite(mp4->stcov_buf, 1, ntohl(mp4->stcov_size) - 16, mp4->fp);
-    fwrite(&mp4->mdat_size , 1, 8 , mp4->fp);
+    if (0) fwrite(&mp4->mdat_size , 1, 8, mp4->fp);
     fseek(mp4->fp, 0, SEEK_END);
 }
 
-void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration)
+static void write_fixed_tracka_data(MP4FILE *mp4)
+{
+    fseek(mp4->fp, mp4->fixta_off, SEEK_SET);
+    fwrite(&mp4->sttsa_size, 1, 16, mp4->fp); fwrite(mp4->sttsa_buf, 1, ntohl(mp4->sttsa_size) - 16, mp4->fp);
+    fwrite(&mp4->stsca_size, 1, ntohl(mp4->stsca_size), mp4->fp);
+    fwrite(&mp4->stsza_size, 1, 20, mp4->fp); fwrite(mp4->stsza_buf, 1, ntohl(mp4->stsza_size) - 20, mp4->fp);
+    fwrite(&mp4->stcoa_size, 1, 16, mp4->fp); fwrite(mp4->stcoa_buf, 1, ntohl(mp4->stcoa_size) - 16, mp4->fp);
+    if (1) fwrite(&mp4->mdat_size , 1, 8, mp4->fp);
+    fseek(mp4->fp, 0, SEEK_END);
+}
+
+void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, int chnum, int samprate, int sampsize, int sampnum)
 {
     MP4FILE *mp4 = calloc(1, sizeof(MP4FILE));
     if (!mp4) return NULL;
     mp4->fp     = fopen(file, "wb");
     mp4->frate  = frate;
     mp4->gop    = gop;
+    mp4->sampnum= sampnum;
     if (!mp4->fp) {
         free(mp4);
         return NULL;
@@ -327,6 +486,7 @@ void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration)
     mp4->mvhd_matrix[8]      = htonl(0x40000000);
     mp4->mvhd_next_trackid   = htonl(3         );
 
+    // video track
     mp4->trakv_size          = offsetof(MP4FILE, mdiav_size) - offsetof(MP4FILE, trakv_size);
     mp4->trakv_type          = MP4_FOURCC('t', 'r', 'a', 'k');
     mp4->tkhdv_size          = htonl(offsetof(MP4FILE, mdiav_size) - offsetof(MP4FILE, tkhdv_size));
@@ -453,14 +613,134 @@ void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration)
     mp4->minfv_size          = htonl(mp4->minfv_size);
     mp4->mdiav_size          = htonl(mp4->mdiav_size);
     mp4->trakv_size          = htonl(mp4->trakv_size);
-    mp4->moov_size           = htonl(mp4->moov_size );
 
+    // audio track
+    mp4->traka_size          = offsetof(MP4FILE, mdiaa_size) - offsetof(MP4FILE, traka_size);
+    mp4->traka_type          = MP4_FOURCC('t', 'r', 'a', 'k');
+    mp4->tkhda_size          = htonl(offsetof(MP4FILE, mdiaa_size) - offsetof(MP4FILE, tkhda_size));
+    mp4->tkhda_type          = MP4_FOURCC('t', 'k', 'h', 'd');
+    mp4->tkhda_flags[2]      = 0xF;
+    mp4->tkhda_trackid       = htonl(2         );
+    mp4->tkhda_duration      = htonl(duration  );
+    mp4->tkhda_volume        = 0x0100;
+
+    mp4->mdiaa_size          = offsetof(MP4FILE, minfa_size) - offsetof(MP4FILE, mdiaa_size);
+    mp4->mdiaa_type          = MP4_FOURCC('m', 'd', 'i', 'a');
+    mp4->mdhda_size          = htonl(offsetof(MP4FILE, hdlra_size) - offsetof(MP4FILE, mdhda_size));
+    mp4->mdhda_type          = MP4_FOURCC('m', 'd', 'h', 'd');
+#if AUDIO_TIMESCALE_BY_FRAME_RATE
+    mp4->mdhda_timescale     = htonl(samprate);
+    mp4->mdhda_duration      = htonl(duration * samprate / 1000);
+#else
+    mp4->mdhda_timescale     = htonl(1000 );
+    mp4->mdhda_duration      = htonl(duration);
+#endif
+    mp4->hdlra_size          = htonl(offsetof(MP4FILE, minfa_size) - offsetof(MP4FILE, hdlra_size));
+    mp4->hdlra_type          = MP4_FOURCC('h', 'd', 'l', 'r');
+    mp4->hdlra_handler_type  = MP4_FOURCC('s', 'o', 'u', 'n');;
+    strcpy((char*)mp4->hdlra_name, "SoundHandler");
+
+    mp4->minfa_size          = offsetof(MP4FILE, stbla_size) - offsetof(MP4FILE, minfa_size);
+    mp4->minfa_type          = MP4_FOURCC('m', 'i', 'n', 'f');
+    mp4->smhda_size          = htonl(offsetof(MP4FILE, dinfa_size) - offsetof(MP4FILE, smhda_size));
+    mp4->smhda_type          = MP4_FOURCC('s', 'm', 'h', 'd');
+
+    mp4->dinfa_size          = htonl(offsetof(MP4FILE, stbla_size) - offsetof(MP4FILE, dinfa_size));
+    mp4->dinfa_type          = MP4_FOURCC('d', 'i', 'n', 'f');
+    mp4->drefa_size          = htonl(offsetof(MP4FILE, stbla_size) - offsetof(MP4FILE, drefa_size));
+    mp4->drefa_type          = MP4_FOURCC('d', 'r', 'e', 'f');
+    mp4->drefa_entry_count   = htonl(1);
+    mp4->urla_size           = htonl(offsetof(MP4FILE, stbla_size) - offsetof(MP4FILE, urla_size ));
+    mp4->urla_type           = MP4_FOURCC('u', 'r', 'l', ' ');
+    mp4->urla_flags[2]       = 1;
+
+    mp4->stbla_size          = offsetof(MP4FILE, stsda_size) - offsetof(MP4FILE, stbla_size);
+    mp4->stbla_type          = MP4_FOURCC('s', 't', 'b', 'l');
+    mp4->stsda_size          = offsetof(MP4FILE, mp4a_size ) - offsetof(MP4FILE, stsda_size);
+    mp4->stsda_type          = MP4_FOURCC('s', 't', 's', 'd');
+    mp4->stsda_entry_count   = htonl(1);
+
+    mp4->mp4a_size           = offsetof(MP4FILE, esds_size) - offsetof(MP4FILE, mp4a_size);
+    mp4->mp4a_type           = MP4_FOURCC('m', 'p', '4', 'a');
+    mp4->mp4a_data_refidx    = htonl(1       ) >> 16;
+    mp4->mp4a_channel_num    = htonl(chnum   ) >> 16;
+    mp4->mp4a_sample_size    = htonl(sampsize) >> 16;
+    mp4->mp4a_sample_rate    = htonl(samprate << 16);
+
+    mp4->esds_size           = offsetof(MP4FILE, sttsa_size) - offsetof(MP4FILE, esds_size);
+    mp4->esds_type           = MP4_FOURCC('e', 's', 'd', 's');
+
+    mp4->esds_esdesc_tag     = 0x03;
+    mp4->esds_esdesc_len     = ((25 << 8) | 0x80);
+    mp4->esds_esdesc_id      = 0x0200;
+    mp4->esds_esdesc_flags   = 0x00;
+    mp4->esds_deccfg_tag     = 0x04;
+    mp4->esds_deccfg_len     = 17;
+    mp4->esds_deccfg_object  = 0x40;
+    mp4->esds_deccfg_stream  = 0x15;
+    mp4->esds_decspec_tag    = 0x05;
+    mp4->esds_decspec_len    = 2;
+    mp4->esds_decspec_info   = 0; // todo
+    mp4->esds_slcfg_tag      = 0x06;
+    mp4->esds_slcfg_len      = 1;
+    mp4->esds_slcfg_reserved = 0x02;
+
+#if AUDIO_TIMESCALE_BY_FRAME_RATE
+    mp4->sttsa_size          = 16 + 1 * sizeof(uint32_t) * 2;
+#else
+    mp4->sttsa_size          = 16 + mp4->frame_max * sizeof(uint32_t) * 2;
+#endif
+    mp4->sttsa_type          = MP4_FOURCC('s', 't', 't', 's');
+
+    mp4->stsca_size          = 16 + sizeof(uint32_t) * 3;
+    mp4->stsca_type          = MP4_FOURCC('s', 't', 's', 'c');
+    mp4->stsca_count         = htonl(1);
+    mp4->stsca_first_chunk   = htonl(1);
+    mp4->stsca_samp_per_chunk= htonl(1);
+    mp4->stsca_samp_desc_id  = htonl(1);
+
+    mp4->stsza_size          = 20 + mp4->frame_max * sizeof(uint32_t) * 1;
+    mp4->stsza_type          = MP4_FOURCC('s', 't', 's', 'z');
+    mp4->stsza_sample_size   = 0;
+
+    mp4->stcoa_size          = 16 + mp4->frame_max * sizeof(uint32_t) * 1;
+    mp4->stcoa_type          = MP4_FOURCC('s', 't', 'c', 'o');
+
+    mp4->mp4a_size          += mp4->esds_size;
+    mp4->stsda_size         += mp4->mp4a_size;
+    mp4->stbla_size         += mp4->stsda_size + mp4->sttsa_size + mp4->stsca_size + mp4->stsza_size + mp4->stcoa_size;
+    mp4->minfa_size         += mp4->stbla_size;
+    mp4->mdiaa_size         += mp4->minfa_size;
+    mp4->traka_size         += mp4->mdiaa_size;
+    mp4->moov_size          += mp4->traka_size;
+
+    mp4->sttsa_buf           = calloc(1, mp4->sttsa_size - 16);
+    mp4->stsza_buf           = calloc(1, mp4->stsza_size - 20);
+    mp4->stcoa_buf           = calloc(1, mp4->stcoa_size - 16);
+
+    mp4->sttsa_size          = htonl(mp4->sttsa_size);
+    mp4->stsca_size          = htonl(mp4->stsca_size);
+    mp4->stsza_size          = htonl(mp4->stsza_size);
+    mp4->stcoa_size          = htonl(mp4->stcoa_size);
+
+    mp4->esds_size           = htonl(mp4->esds_size );
+    mp4->mp4a_size           = htonl(mp4->mp4a_size );
+    mp4->stsda_size          = htonl(mp4->stsda_size);
+    mp4->stbla_size          = htonl(mp4->stbla_size);
+    mp4->minfa_size          = htonl(mp4->minfa_size);
+    mp4->mdiaa_size          = htonl(mp4->mdiaa_size);
+    mp4->traka_size          = htonl(mp4->traka_size);
+
+    mp4->moov_size           = htonl(mp4->moov_size );
     mp4->mdat_size           = htonl(8);
     mp4->mdat_type           = MP4_FOURCC('m', 'd', 'a', 't');
 
     fwrite(mp4, 1, offsetof(MP4FILE, sttsv_size), mp4->fp);
-    mp4->fffix_off = ftell(mp4->fp);
-    write_fixed_moov_data(mp4);
+    mp4->fixtv_off = ftell(mp4->fp);
+    write_fixed_trackv_data(mp4);
+    fwrite(&mp4->traka_size, 1, offsetof(MP4FILE, sttsa_size) - offsetof(MP4FILE, traka_size), mp4->fp);
+    mp4->fixta_off = ftell(mp4->fp);
+    write_fixed_tracka_data(mp4);
     mp4->chunk_off = ftell(mp4->fp);
     mp4->avcc_sps_len = 0;
     mp4->avcc_pps_len = 0;
@@ -471,12 +751,16 @@ void mp4muxer_exit(void *ctx)
 {
     MP4FILE *mp4 = (MP4FILE*)ctx;
     if (mp4) {
-        write_fixed_moov_data(mp4);
+        write_fixed_trackv_data(mp4);
+        write_fixed_tracka_data(mp4);
         fclose(mp4->fp);
         if (mp4->sttsv_buf) free(mp4->sttsv_buf);
         if (mp4->stssv_buf) free(mp4->stssv_buf);
         if (mp4->stszv_buf) free(mp4->stszv_buf);
         if (mp4->stcov_buf) free(mp4->stcov_buf);
+        if (mp4->sttsa_buf) free(mp4->sttsa_buf);
+        if (mp4->stsza_buf) free(mp4->stsza_buf);
+        if (mp4->stcoa_buf) free(mp4->stcoa_buf);
         free(mp4);
     }
 }
@@ -576,7 +860,7 @@ int main(void)
 {
     uint8_t sps[] = { 103,77,0,40,229,64,60,1,19,242,160 };
     uint8_t pps[] = { 104,238,49,18 };
-    void *mp4 = mp4muxer_init("test.mp4", 1920, 1080, 25, 50, 60000);
+    void *mp4 = mp4muxer_init("test.mp4", 60000, 1920, 1080, 25, 50, 1, 8000, 16, 534);
     mp4muxer_spspps(mp4, sps, sizeof(sps), pps, sizeof(pps));
     mp4muxer_exit(mp4);
     return 0;
