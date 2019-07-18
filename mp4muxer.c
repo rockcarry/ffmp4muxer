@@ -346,10 +346,11 @@ void* mp4muxer_init(char *file, int w, int h, int frate, int gop, int duration)
     mp4->mdhdv_type          = MP4_FOURCC('m', 'd', 'h', 'd');
 #if VIDEO_TIMESCALE_BY_FRAME_RATE
     mp4->mdhdv_timescale     = htonl(frate);
+    mp4->mdhdv_duration      = htonl(duration * frate / 1000);
 #else
     mp4->mdhdv_timescale     = htonl(1000 );
+    mp4->mdhdv_duration      = htonl(duration);
 #endif
-    mp4->mdhdv_duration      = htonl(duration * frate / 1000);
     mp4->hdlrv_size          = htonl(offsetof(MP4FILE, minfv_size) - offsetof(MP4FILE, hdlrv_size));
     mp4->hdlrv_type          = MP4_FOURCC('h', 'd', 'l', 'r');
     mp4->hdlrv_handler_type  = MP4_FOURCC('v', 'i', 'd', 'e');;
