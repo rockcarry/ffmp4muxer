@@ -483,12 +483,22 @@ void mp4muxer_exit(void *ctx)
 void mp4muxer_video(void *ctx, unsigned char *buf, int len)
 {
     MP4FILE *mp4 = (MP4FILE*)ctx;
-    int      key = 0;
+    int      key = 0, newlen;
     uint8_t *spsbuf, *ppsbuf;
     int      spslen,  ppslen;
     if (!ctx) return;
 
-    if (!h264_parse_key_sps_pps(buf, len, &key, &spsbuf, &spslen, &ppsbuf, &ppslen)) return;
+    newlen = h264_parse_key_sps_pps(buf, len, &key, &spsbuf, &spslen, &ppsbuf, &ppslen);
+    if (!newlen) return;
+    if (len - newlen > 4) {
+        buf   += len - (newlen + 4);
+        len    = newlen + 4;
+        buf[3] = (newlen >> 0 ) & 0xFF;
+        buf[2] = (newlen >> 8 ) & 0xFF;
+        buf[1] = (newlen >> 16) & 0xFF;
+        buf[0] = (newlen >> 24) & 0xFF;
+    }
+
     if (!mp4->avcc_sps_len && spslen) mp4muxer_spspps(mp4, spsbuf, spslen, NULL, 0);
     if (!mp4->avcc_pps_len && ppslen) mp4muxer_spspps(mp4, NULL, 0, ppsbuf, ppslen);
 
