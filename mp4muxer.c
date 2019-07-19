@@ -89,8 +89,8 @@ int h264_parse_key_sps_pps(uint8_t *data, int len, int *key, uint8_t **sps_buf, 
 #endif
 #define MP4_FOURCC(a, b, c, d)  (((a) << 0) | ((b) << 8) | ((c) << 16) | ((d) << 24))
 
-#define VIDEO_TIMESCALE_BY_FRAME_RATE  1
-#define AUDIO_TIMESCALE_BY_FRAME_RATE  1
+#define VIDEO_TIMESCALE_BY_FRAME_RATE   1
+#define AUDIO_TIMESCALE_BY_SAMPLE_RATE  1
 
 #pragma pack(1)
 typedef struct {
@@ -364,14 +364,16 @@ typedef struct {
     uint8_t   esds_esdesc_flags;  // 0x00
     uint8_t   esds_deccfg_tag;    // 0x04
     uint8_t   esds_deccfg_len;    // 17
-    uint8_t   esds_deccfg_object; // 0x40 - aac
+    uint8_t   esds_deccfg_object; // 0x40 - aac, 0x6B - mp3
     uint8_t   esds_deccfg_stream; // 0x15
     uint8_t   esds_deccfg_buffer_size[3];
     uint32_t  esds_deccfg_max_bitrate;
     uint32_t  esds_deccfg_avg_bitrate;
+    //++ if esds_deccfg_object == aac
     uint8_t   esds_decspec_tag;   // 0x05
     uint8_t   esds_decspec_len;   // 2
     uint16_t  esds_decspec_info;
+    //-- if esds_deccfg_object == aac
     uint8_t   esds_slcfg_tag;     // 0x06
     uint8_t   esds_slcfg_len;     // 1
     uint8_t   esds_slcfg_reserved;// 0x02
@@ -417,7 +419,9 @@ typedef struct {
     int       fixta_off;
     int       chunk_off;
     uint32_t  vpts_last;
-    int       frame_max;
+    uint32_t  apts_last;
+    int       aframemax;
+    int       vframemax;
     int       syncf_max;
     uint32_t *sttsv_buf;
     uint32_t *stssv_buf;
@@ -560,13 +564,13 @@ void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, 
     mp4->avcc_pps_num        = 1;
     mp4->avcc_pps_len        = htonl(sizeof(mp4->avcc_pps_data)) >> 16;
 
-    mp4->frame_max           = duration * frate / 1000 + frate / 2;
-    mp4->syncf_max           = mp4->frame_max / mp4->gop;
+    mp4->vframemax           = duration * frate / 1000 + frate / 2;
+    mp4->syncf_max           = mp4->vframemax / mp4->gop;
 
 #if VIDEO_TIMESCALE_BY_FRAME_RATE
     mp4->sttsv_size          = 16 + 1 * sizeof(uint32_t) * 2;
 #else
-    mp4->sttsv_size          = 16 + mp4->frame_max * sizeof(uint32_t) * 2;
+    mp4->sttsv_size          = 16 + mp4->vframemax * sizeof(uint32_t) * 2;
 #endif
     mp4->sttsv_type          = MP4_FOURCC('s', 't', 't', 's');
 
@@ -580,11 +584,11 @@ void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, 
     mp4->stscv_samp_per_chunk= htonl(1);
     mp4->stscv_samp_desc_id  = htonl(1);
 
-    mp4->stszv_size          = 20 + mp4->frame_max * sizeof(uint32_t) * 1;
+    mp4->stszv_size          = 20 + mp4->vframemax * sizeof(uint32_t) * 1;
     mp4->stszv_type          = MP4_FOURCC('s', 't', 's', 'z');
     mp4->stszv_sample_size   = 0;
 
-    mp4->stcov_size          = 16 + mp4->frame_max * sizeof(uint32_t) * 1;
+    mp4->stcov_size          = 16 + mp4->vframemax * sizeof(uint32_t) * 1;
     mp4->stcov_type          = MP4_FOURCC('s', 't', 'c', 'o');
 
     mp4->avc1_size          += mp4->avcc_size;
@@ -628,7 +632,7 @@ void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, 
     mp4->mdiaa_type          = MP4_FOURCC('m', 'd', 'i', 'a');
     mp4->mdhda_size          = htonl(offsetof(MP4FILE, hdlra_size) - offsetof(MP4FILE, mdhda_size));
     mp4->mdhda_type          = MP4_FOURCC('m', 'd', 'h', 'd');
-#if AUDIO_TIMESCALE_BY_FRAME_RATE
+#if AUDIO_TIMESCALE_BY_SAMPLE_RATE
     mp4->mdhda_timescale     = htonl(samprate);
     mp4->mdhda_duration      = htonl(duration * samprate / 1000);
 #else
@@ -680,15 +684,16 @@ void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, 
     mp4->esds_deccfg_stream  = 0x15;
     mp4->esds_decspec_tag    = 0x05;
     mp4->esds_decspec_len    = 2;
-    mp4->esds_decspec_info   = 0; // todo
+    mp4->esds_decspec_info   = 0; // need to be set
     mp4->esds_slcfg_tag      = 0x06;
     mp4->esds_slcfg_len      = 1;
     mp4->esds_slcfg_reserved = 0x02;
 
-#if AUDIO_TIMESCALE_BY_FRAME_RATE
+    mp4->aframemax           = duration * samprate / 1000 / sampnum + samprate / sampnum;
+#if AUDIO_TIMESCALE_BY_SAMPLE_RATE
     mp4->sttsa_size          = 16 + 1 * sizeof(uint32_t) * 2;
 #else
-    mp4->sttsa_size          = 16 + mp4->frame_max * sizeof(uint32_t) * 2;
+    mp4->sttsa_size          = 16 + mp4->aframemax * sizeof(uint32_t) * 2;
 #endif
     mp4->sttsa_type          = MP4_FOURCC('s', 't', 't', 's');
 
@@ -699,11 +704,11 @@ void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, 
     mp4->stsca_samp_per_chunk= htonl(1);
     mp4->stsca_samp_desc_id  = htonl(1);
 
-    mp4->stsza_size          = 20 + mp4->frame_max * sizeof(uint32_t) * 1;
+    mp4->stsza_size          = 20 + mp4->aframemax * sizeof(uint32_t) * 1;
     mp4->stsza_type          = MP4_FOURCC('s', 't', 's', 'z');
     mp4->stsza_sample_size   = 0;
 
-    mp4->stcoa_size          = 16 + mp4->frame_max * sizeof(uint32_t) * 1;
+    mp4->stcoa_size          = 16 + mp4->aframemax * sizeof(uint32_t) * 1;
     mp4->stcoa_type          = MP4_FOURCC('s', 't', 'c', 'o');
 
     mp4->mp4a_size          += mp4->esds_size;
@@ -765,7 +770,7 @@ void mp4muxer_exit(void *ctx)
     }
 }
 
-void mp4muxer_video(void *ctx, unsigned char *buf, int len)
+void mp4muxer_video(void *ctx, unsigned char *buf, int len, unsigned pts)
 {
     MP4FILE *mp4 = (MP4FILE*)ctx;
     int      key = 0, newlen;
@@ -787,7 +792,7 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len)
     if (!mp4->avcc_sps_len && spslen) mp4muxer_spspps(mp4, spsbuf, spslen, NULL, 0);
     if (!mp4->avcc_pps_len && ppslen) mp4muxer_spspps(mp4, NULL, 0, ppsbuf, ppslen);
 
-    if (mp4->stszv_buf && ntohl(mp4->stszv_count) < mp4->frame_max) {
+    if (mp4->stszv_buf && ntohl(mp4->stszv_count) < mp4->vframemax) {
         mp4->stszv_buf[ntohl(mp4->stszv_count)] = htonl(len);
         mp4->stszv_count = htonl(ntohl(mp4->stszv_count) + 1);
     }
@@ -804,7 +809,7 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len)
         mp4->sttsv_count  = htonl(1);
     }
 #else
-    if (mp4->sttsv_buf && ntohl(mp4->sttsv_count) < mp4->frame_max) {
+    if (mp4->sttsv_buf && ntohl(mp4->sttsv_count) < mp4->vframemax) {
         mp4->sttsv_buf[ntohl(mp4->sttsv_count) * 2 + 0] = htonl(1);
         mp4->sttsv_buf[ntohl(mp4->sttsv_count) * 2 + 1] = htonl(mp4->vpts_last ? pts - mp4->vpts_last : 1000 / mp4->frate);
         mp4->sttsv_count = htonl(ntohl(mp4->sttsv_count) + 1);
@@ -812,7 +817,7 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len)
     }
 #endif
 
-    if (mp4->stcov_buf && ntohl(mp4->stcov_count) < mp4->frame_max) {
+    if (mp4->stcov_buf && ntohl(mp4->stcov_count) < mp4->vframemax) {
         mp4->stcov_buf[ntohl(mp4->stcov_count)] = htonl(mp4->chunk_off);
         mp4->stcov_count = htonl(ntohl(mp4->stcov_count) + 1);
     }
@@ -822,10 +827,39 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len)
     fwrite(buf, 1, len, mp4->fp);
 }
 
-void mp4muxer_audio(void *ctx, unsigned char *buf, int len)
+void mp4muxer_audio(void *ctx, unsigned char *buf, int len, unsigned pts)
 {
     MP4FILE *mp4 = (MP4FILE*)ctx;
     if (!ctx) return;
+
+    if (mp4->stsza_buf && ntohl(mp4->stsza_count) < mp4->aframemax) {
+        mp4->stsza_buf[ntohl(mp4->stsza_count)] = htonl(len);
+        mp4->stsza_count = htonl(ntohl(mp4->stsza_count) + 1);
+    }
+
+#if AUDIO_TIMESCALE_BY_SAMPLE_RATE
+    if (mp4->sttsa_buf) {
+        mp4->sttsa_buf[0] = mp4->stsza_count;
+        mp4->sttsa_buf[1] = htonl(mp4->sampnum);
+        mp4->sttsa_count  = htonl(1);
+    }
+#else
+    if (mp4->sttsa_buf && ntohl(mp4->sttsa_count) < mp4->aframemax) {
+        mp4->sttsa_buf[ntohl(mp4->sttsa_count) * 2 + 0] = htonl(1);
+        mp4->sttsa_buf[ntohl(mp4->sttsa_count) * 2 + 1] = htonl(mp4->apts_last ? pts - mp4->apts_last : 1000 / mp4->frate);
+        mp4->sttsa_count = htonl(ntohl(mp4->sttsa_count) + 1);
+        mp4->apts_last = pts;
+    }
+#endif
+
+    if (mp4->stcoa_buf && ntohl(mp4->stcoa_count) < mp4->aframemax) {
+        mp4->stcoa_buf[ntohl(mp4->stcoa_count)] = htonl(mp4->chunk_off);
+        mp4->stcoa_count = htonl(ntohl(mp4->stcoa_count) + 1);
+    }
+
+    mp4->mdat_size = htonl(ntohl(mp4->mdat_size) + len);
+    mp4->chunk_off+= len;
+    fwrite(buf, 1, len, mp4->fp);
 }
 
 void mp4muxer_spspps(void *ctx, uint8_t *spsbuf, int spslen, uint8_t *ppsbuf, int ppslen)
@@ -855,14 +889,27 @@ void mp4muxer_spspps(void *ctx, uint8_t *spsbuf, int spslen, uint8_t *ppsbuf, in
     }
 }
 
+void mp4muxer_aacdecspecinfo(void *ctx, unsigned char *specinfo)
+{
+    MP4FILE *mp4 = (MP4FILE*)ctx;
+    if (!ctx || !specinfo) return;
+    mp4->esds_decspec_info = (specinfo[1] << 8) | (specinfo[0] << 0);
+    fseek(mp4->fp, mp4->fixta_off - offsetof(MP4FILE, sttsa_size) + offsetof(MP4FILE, esds_decspec_info), SEEK_SET);
+    fwrite(&mp4->esds_decspec_info, 1, sizeof(mp4->esds_decspec_info), mp4->fp);
+    fseek(mp4->fp, 0, SEEK_END);
+}
+
 #ifdef _TEST_
 int main(void)
 {
     uint8_t sps[] = { 103,77,0,40,229,64,60,1,19,242,160 };
     uint8_t pps[] = { 104,238,49,18 };
+    uint8_t dsi[] = { 0x12, 0x34 };
     void *mp4 = mp4muxer_init("test.mp4", 60000, 1920, 1080, 25, 50, 1, 8000, 16, 534);
     mp4muxer_spspps(mp4, sps, sizeof(sps), pps, sizeof(pps));
+    mp4muxer_aacdecspecinfo(mp4, dsi);
     mp4muxer_exit(mp4);
     return 0;
 }
 #endif
+
