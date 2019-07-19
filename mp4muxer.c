@@ -456,7 +456,7 @@ static void write_fixed_tracka_data(MP4FILE *mp4)
     fseek(mp4->fp, 0, SEEK_END);
 }
 
-void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, int chnum, int samprate, int sampsize, int sampnum)
+void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, int chnum, int samprate, int sampsize, int sampnum, unsigned char *aacspecinfo)
 {
     MP4FILE *mp4 = calloc(1, sizeof(MP4FILE));
     if (!mp4) return NULL;
@@ -684,7 +684,7 @@ void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, 
     mp4->esds_deccfg_stream  = 0x15;
     mp4->esds_decspec_tag    = 0x05;
     mp4->esds_decspec_len    = 2;
-    mp4->esds_decspec_info   = 0; // need to be set
+    mp4->esds_decspec_info   = aacspecinfo ? (aacspecinfo[1] << 8) | (aacspecinfo[0] << 0) : 0;
     mp4->esds_slcfg_tag      = 0x06;
     mp4->esds_slcfg_len      = 1;
     mp4->esds_slcfg_reserved = 0x02;
@@ -905,7 +905,7 @@ int main(void)
     uint8_t sps[] = { 103,77,0,40,229,64,60,1,19,242,160 };
     uint8_t pps[] = { 104,238,49,18 };
     uint8_t dsi[] = { 0x12, 0x34 };
-    void *mp4 = mp4muxer_init("test.mp4", 60000, 1920, 1080, 25, 50, 1, 8000, 16, 534);
+    void *mp4 = mp4muxer_init("test.mp4", 60000, 1920, 1080, 25, 50, 1, 8000, 16, 1024, NULL);
     mp4muxer_spspps(mp4, sps, sizeof(sps), pps, sizeof(pps));
     mp4muxer_aacdecspecinfo(mp4, dsi);
     mp4muxer_exit(mp4);
