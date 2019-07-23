@@ -689,7 +689,7 @@ void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, 
     mp4->esds_slcfg_len      = 1;
     mp4->esds_slcfg_reserved = 0x02;
 
-    mp4->aframemax           = duration * samprate / 1000 / sampnum + samprate / sampnum;
+    mp4->aframemax           = duration * samprate / 1000 / sampnum + samprate / sampnum / 2;
 #if AUDIO_TIMESCALE_BY_SAMPLE_RATE
     mp4->sttsa_size          = 16 + 1 * sizeof(uint32_t) * 2;
 #else
