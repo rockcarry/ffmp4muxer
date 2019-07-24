@@ -451,28 +451,28 @@ typedef struct {
 
 static void write_fixed_trackv_data(MP4FILE *mp4)
 {
-    if (mp4->sttsv_cur < ntohl(mp4->sttsv_count)) {
+    if (mp4->sttsv_buf && mp4->sttsv_cur < ntohl(mp4->sttsv_count)) {
         fseek(mp4->fp, mp4->sttsv_off + 12, SEEK_SET);
         fwrite(&mp4->sttsv_count, 1, sizeof(uint32_t), mp4->fp);
         fseek(mp4->fp, mp4->sttsv_cur * sizeof(uint32_t) * 2, SEEK_CUR);
         fwrite(&mp4->sttsv_buf[mp4->sttsv_cur], 1, (ntohl(mp4->sttsv_count) - mp4->sttsv_cur) * sizeof(uint32_t) * 2, mp4->fp);
         mp4->sttsv_cur = ntohl(mp4->sttsv_count);
     }
-    if (mp4->stssv_cur < ntohl(mp4->stssv_count)) {
+    if (mp4->stssv_buf && mp4->stssv_cur < ntohl(mp4->stssv_count)) {
         fseek(mp4->fp, mp4->stssv_off + 12, SEEK_SET);
         fwrite(&mp4->stssv_count, 1, sizeof(uint32_t), mp4->fp);
         fseek(mp4->fp, mp4->stssv_cur * sizeof(uint32_t), SEEK_CUR);
         fwrite(&mp4->stssv_buf[mp4->stssv_cur], 1, (ntohl(mp4->stssv_count) - mp4->stssv_cur) * sizeof(uint32_t), mp4->fp);
         mp4->stssv_cur = ntohl(mp4->stssv_count);
     }
-    if (mp4->stszv_cur < ntohl(mp4->stszv_count)) {
+    if (mp4->stszv_buf && mp4->stszv_cur < ntohl(mp4->stszv_count)) {
         fseek(mp4->fp, mp4->stszv_off + 16, SEEK_SET);
         fwrite(&mp4->stszv_count, 1, sizeof(uint32_t), mp4->fp);
         fseek(mp4->fp, mp4->stszv_cur * sizeof(uint32_t), SEEK_CUR);
         fwrite(&mp4->stszv_buf[mp4->stszv_cur], 1, (ntohl(mp4->stszv_count) - mp4->stszv_cur) * sizeof(uint32_t), mp4->fp);
         mp4->stszv_cur = ntohl(mp4->stszv_count);
     }
-    if (mp4->stcov_cur < ntohl(mp4->stcov_count)) {
+    if (mp4->stcov_buf && mp4->stcov_cur < ntohl(mp4->stcov_count)) {
         fseek(mp4->fp, mp4->stcov_off + 12, SEEK_SET);
         fwrite(&mp4->stcov_count, 1, sizeof(uint32_t), mp4->fp);
         fseek(mp4->fp, mp4->stcov_cur * sizeof(uint32_t), SEEK_CUR);
@@ -486,21 +486,21 @@ static void write_fixed_trackv_data(MP4FILE *mp4)
 
 static void write_fixed_tracka_data(MP4FILE *mp4)
 {
-    if (mp4->sttsa_cur < ntohl(mp4->sttsa_count)) {
+    if (mp4->sttsa_buf && mp4->sttsa_cur < ntohl(mp4->sttsa_count)) {
         fseek(mp4->fp, mp4->sttsa_off + 12, SEEK_SET);
         fwrite(&mp4->sttsa_count, 1, sizeof(uint32_t), mp4->fp);
         fseek(mp4->fp, mp4->sttsa_cur * sizeof(uint32_t) * 2, SEEK_CUR);
         fwrite(&mp4->sttsa_buf[mp4->sttsa_cur], 1, (ntohl(mp4->sttsa_count) - mp4->sttsa_cur) * sizeof(uint32_t) * 2, mp4->fp);
         mp4->sttsa_cur = ntohl(mp4->sttsa_count);
     }
-    if (mp4->stsza_cur < ntohl(mp4->stsza_count)) {
+    if (mp4->stsza_buf && mp4->stsza_cur < ntohl(mp4->stsza_count)) {
         fseek(mp4->fp, mp4->stsza_off + 16, SEEK_SET);
         fwrite(&mp4->stsza_count, 1, sizeof(uint32_t), mp4->fp);
         fseek(mp4->fp, mp4->stsza_cur * sizeof(uint32_t), SEEK_CUR);
         fwrite(&mp4->stsza_buf[mp4->stsza_cur], 1, (ntohl(mp4->stsza_count) - mp4->stsza_cur) * sizeof(uint32_t), mp4->fp);
         mp4->stsza_cur = ntohl(mp4->stsza_count);
     }
-    if (mp4->stcoa_cur < ntohl(mp4->stcoa_count)) {
+    if (mp4->stcoa_buf && mp4->stcoa_cur < ntohl(mp4->stcoa_count)) {
         fseek(mp4->fp, mp4->stcoa_off + 12, SEEK_SET);
         fwrite(&mp4->stcoa_count, 1, sizeof(uint32_t), mp4->fp);
         fseek(mp4->fp, mp4->stcoa_cur * sizeof(uint32_t), SEEK_CUR);
@@ -807,16 +807,16 @@ void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, 
     mp4->mdat_type           = MP4_FOURCC('m', 'd', 'a', 't');
 
     fwrite(mp4, 1, offsetof(MP4FILE, sttsv_size), mp4->fp);
-    fwrite(&mp4->sttsv_size, 1, 16, mp4->fp); fwrite(mp4->sttsv_buf, 1, ntohl(mp4->sttsv_size) - 16, mp4->fp);
-    fwrite(&mp4->stssv_size, 1, 16, mp4->fp); fwrite(mp4->stssv_buf, 1, ntohl(mp4->stssv_size) - 16, mp4->fp);
+    fwrite(&mp4->sttsv_size, 1, 16, mp4->fp); fseek(mp4->fp, ntohl(mp4->sttsv_size) - 16, SEEK_CUR);
+    fwrite(&mp4->stssv_size, 1, 16, mp4->fp); fseek(mp4->fp, ntohl(mp4->stssv_size) - 16, SEEK_CUR);
     fwrite(&mp4->stscv_size, 1, ntohl(mp4->stscv_size), mp4->fp);
-    fwrite(&mp4->stszv_size, 1, 20, mp4->fp); fwrite(mp4->stszv_buf, 1, ntohl(mp4->stszv_size) - 20, mp4->fp);
-    fwrite(&mp4->stcov_size, 1, 16, mp4->fp); fwrite(mp4->stcov_buf, 1, ntohl(mp4->stcov_size) - 16, mp4->fp);
+    fwrite(&mp4->stszv_size, 1, 20, mp4->fp); fseek(mp4->fp, ntohl(mp4->stszv_size) - 20, SEEK_CUR);
+    fwrite(&mp4->stcov_size, 1, 16, mp4->fp); fseek(mp4->fp, ntohl(mp4->stcov_size) - 16, SEEK_CUR);
     fwrite(&mp4->traka_size, 1, offsetof(MP4FILE, sttsa_size) - offsetof(MP4FILE, traka_size), mp4->fp);
-    fwrite(&mp4->sttsa_size, 1, 16, mp4->fp); fwrite(mp4->sttsa_buf, 1, ntohl(mp4->sttsa_size) - 16, mp4->fp);
+    fwrite(&mp4->sttsa_size, 1, 16, mp4->fp); fseek(mp4->fp, ntohl(mp4->sttsa_size) - 16, SEEK_CUR);
     fwrite(&mp4->stsca_size, 1, ntohl(mp4->stsca_size), mp4->fp);
-    fwrite(&mp4->stsza_size, 1, 20, mp4->fp); fwrite(mp4->stsza_buf, 1, ntohl(mp4->stsza_size) - 20, mp4->fp);
-    fwrite(&mp4->stcoa_size, 1, 16, mp4->fp); fwrite(mp4->stcoa_buf, 1, ntohl(mp4->stcoa_size) - 16, mp4->fp);
+    fwrite(&mp4->stsza_size, 1, 20, mp4->fp); fseek(mp4->fp, ntohl(mp4->stsza_size) - 20, SEEK_CUR);
+    fwrite(&mp4->stcoa_size, 1, 16, mp4->fp); fseek(mp4->fp, ntohl(mp4->stcoa_size) - 16, SEEK_CUR);
     fwrite(&mp4->mdat_size , 1, ntohl(mp4->mdat_size), mp4->fp);
 
     mp4->chunk_off    = ntohl(mp4->ftyp_size) + ntohl(mp4->moov_size) + ntohl(mp4->mdat_size);
