@@ -451,6 +451,13 @@ typedef struct {
 
 static void write_fixed_trackv_data(MP4FILE *mp4)
 {
+#if VIDEO_TIMESCALE_BY_FRAME_RATE
+    if (1) {
+        fseek(mp4->fp, mp4->sttsv_off + 12, SEEK_SET);
+        fwrite(&mp4->sttsv_count , 1, sizeof(uint32_t) * 1, mp4->fp);
+        fwrite(&mp4->sttsv_buf[0], 1, sizeof(uint32_t) * 2, mp4->fp);
+    }
+#else
     if (mp4->sttsv_buf && mp4->sttsv_cur < ntohl(mp4->sttsv_count)) {
         fseek(mp4->fp, mp4->sttsv_off + 12, SEEK_SET);
         fwrite(&mp4->sttsv_count, 1, sizeof(uint32_t), mp4->fp);
@@ -458,6 +465,7 @@ static void write_fixed_trackv_data(MP4FILE *mp4)
         fwrite(&mp4->sttsv_buf[mp4->sttsv_cur], 1, (ntohl(mp4->sttsv_count) - mp4->sttsv_cur) * sizeof(uint32_t) * 2, mp4->fp);
         mp4->sttsv_cur = ntohl(mp4->sttsv_count);
     }
+#endif
     if (mp4->stssv_buf && mp4->stssv_cur < ntohl(mp4->stssv_count)) {
         fseek(mp4->fp, mp4->stssv_off + 12, SEEK_SET);
         fwrite(&mp4->stssv_count, 1, sizeof(uint32_t), mp4->fp);
@@ -486,6 +494,13 @@ static void write_fixed_trackv_data(MP4FILE *mp4)
 
 static void write_fixed_tracka_data(MP4FILE *mp4)
 {
+#if AUDIO_TIMESCALE_BY_SAMPLE_RATE
+    if (1) {
+        fseek(mp4->fp, mp4->sttsa_off + 12, SEEK_SET);
+        fwrite(&mp4->sttsa_count , 1, sizeof(uint32_t) * 1, mp4->fp);
+        fwrite(&mp4->sttsa_buf[0], 1, sizeof(uint32_t) * 2, mp4->fp);
+    }
+#else
     if (mp4->sttsa_buf && mp4->sttsa_cur < ntohl(mp4->sttsa_count)) {
         fseek(mp4->fp, mp4->sttsa_off + 12, SEEK_SET);
         fwrite(&mp4->sttsa_count, 1, sizeof(uint32_t), mp4->fp);
@@ -493,6 +508,7 @@ static void write_fixed_tracka_data(MP4FILE *mp4)
         fwrite(&mp4->sttsa_buf[mp4->sttsa_cur], 1, (ntohl(mp4->sttsa_count) - mp4->sttsa_cur) * sizeof(uint32_t) * 2, mp4->fp);
         mp4->sttsa_cur = ntohl(mp4->sttsa_count);
     }
+#endif
     if (mp4->stsza_buf && mp4->stsza_cur < ntohl(mp4->stsza_count)) {
         fseek(mp4->fp, mp4->stsza_off + 16, SEEK_SET);
         fwrite(&mp4->stsza_count, 1, sizeof(uint32_t), mp4->fp);
