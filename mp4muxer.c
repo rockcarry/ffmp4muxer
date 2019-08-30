@@ -590,7 +590,7 @@ void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, 
 #endif
     mp4->hdlrv_size          = htonl(offsetof(MP4FILE, minfv_size) - offsetof(MP4FILE, hdlrv_size));
     mp4->hdlrv_type          = MP4_FOURCC('h', 'd', 'l', 'r');
-    mp4->hdlrv_handler_type  = MP4_FOURCC('v', 'i', 'd', 'e');;
+    mp4->hdlrv_handler_type  = MP4_FOURCC('v', 'i', 'd', 'e');
     strcpy((char*)mp4->hdlrv_name, "VideoHandler");
 
     mp4->minfv_size          = offsetof(MP4FILE, stblv_size) - offsetof(MP4FILE, minfv_size);
