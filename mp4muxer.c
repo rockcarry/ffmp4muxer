@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #ifdef WIN32
 #include <winsock2.h>
 #else
@@ -554,6 +555,8 @@ void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, 
     mp4->moov_type           = MP4_FOURCC('m', 'o', 'o', 'v');
     mp4->mvhd_size           = htonl(offsetof(MP4FILE, trakv_size) - offsetof(MP4FILE, mvhd_size));
     mp4->mvhd_type           = MP4_FOURCC('m', 'v', 'h', 'd');
+    mp4->mvhd_create_time    = time(NULL) + 2082873600ull;
+    mp4->mvhd_modify_time    = mp4->mvhd_create_time;
     mp4->mvhd_timescale      = htonl(1000      );
     mp4->mvhd_duration       = htonl(duration  );
     mp4->mvhd_playrate       = htonl(0x00010000);
