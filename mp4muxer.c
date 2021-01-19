@@ -495,6 +495,10 @@ static void mp4muxer_write_avc1_box(MP4FILE *mp4, uint8_t *spsbuf, int spslen, u
 {
     AVC1BOX avc1box = {0};
     AVCCBOX avccbox = {0};
+    int     i;
+
+    for (i=0; i<spslen-1 && spsbuf[i]==0; i++); spsbuf += i+1; spslen -= i+1;
+    for (i=0; i<ppslen-1 && ppsbuf[i]==0; i++); ppsbuf += i+1; ppslen -= i+1;
 
     avccbox.avcc_size          = sizeof(AVCCBOX) + spslen + spslen;
     avccbox.avcc_type          = MP4_FOURCC('a', 'v', 'c', 'C');
@@ -536,6 +540,11 @@ static void mp4muxer_write_hev1_box(MP4FILE *mp4, uint8_t *vpsbuf, int vpslen, u
 {
     AVC1BOX hev1box = {0};
     HVCCBOX hvccbox = {0};
+    int     i;
+
+    for (i=0; i<vpslen-1 && vpsbuf[i]==0; i++); vpsbuf += i+1; vpslen -= i+1;
+    for (i=0; i<spslen-1 && spsbuf[i]==0; i++); spsbuf += i+1; spslen -= i+1;
+    for (i=0; i<ppslen-1 && ppsbuf[i]==0; i++); ppsbuf += i+1; ppslen -= i+1;
 
     hvccbox.hvcc_size            = sizeof(HVCCBOX) + 3 * 5 + vpslen + spslen + ppslen;
     hvccbox.hvcc_type            = MP4_FOURCC('h', 'v', 'c', 'C');
@@ -995,7 +1004,7 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len, int key, unsigned pt
 {
     MP4FILE *mp4 = (MP4FILE*)ctx;
     uint8_t  *vpsbuf = NULL, *spsbuf = NULL, *ppsbuf = NULL;
-    int       vpslen = 0,     spslen = 0,     ppslen = 0, fsize;
+    int       vpslen = 0,     spslen = 0,     ppslen = 0, fsize, i;
     if (!ctx) return;
 
     if (mp4->flags & FLAG_VIDEO_H265_ENCODE) {
@@ -1016,6 +1025,7 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len, int key, unsigned pt
     if (fsize == 0) return;
     if (vpslen + spslen + ppslen) key = 1;
     buf  += vpslen + spslen + ppslen;
+    for (i=0; i<fsize-1 && buf[i]==0; i++); buf += i+1; fsize -= i+1;
     len   = fsize;
     fsize = htonl(fsize);
 
