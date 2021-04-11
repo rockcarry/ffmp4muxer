@@ -513,7 +513,7 @@ static void mp4muxer_write_avc1_box(MP4FILE *mp4, uint8_t *spsbuf, int spslen, u
     avccbox.avcc_pps_len       = (uint16_t)(htonl(ppslen) >> 16);
 
     avc1box.avc1_size          = sizeof(AVC1BOX) + avccbox.avcc_size;
-    avc1box.avc1_type          = MP4_FOURCC('a', 'v', 'c', '1');
+    avc1box.avc1_type          = MP4_FOURCC('h', '2', '6', '4');
     avc1box.avc1_data_refidx   = (uint16_t)(htonl(1 ) >> 16);
     avc1box.avc1_width         = (uint16_t)(htonl(mp4->vw) >> 16);
     avc1box.avc1_height        = (uint16_t)(htonl(mp4->vh) >> 16);
@@ -618,7 +618,7 @@ static void write_fixed_trackv_data(MP4FILE *mp4)
         fwrite(&mp4->sttsv_buf[0], 1, sizeof(uint32_t) * 2, mp4->fp);
     }
 #else
-    if (mp4->sttsv_buf && mp4->sttsv_cur < ntohl(mp4->sttsv_count)) {
+    if (mp4->sttsv_buf && mp4->sttsv_cur < (int)ntohl(mp4->sttsv_count)) {
         fseek(mp4->fp, mp4->sttsv_off + 12, SEEK_SET);
         fwrite(&mp4->sttsv_count, 1, sizeof(uint32_t), mp4->fp);
         fseek(mp4->fp, mp4->sttsv_cur * sizeof(uint32_t) * 2, SEEK_CUR);
@@ -1004,33 +1004,25 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len, int key, unsigned pt
 {
     MP4FILE *mp4 = (MP4FILE*)ctx;
     uint8_t  *vpsbuf = NULL, *spsbuf = NULL, *ppsbuf = NULL;
-    int       vpslen = 0,     spslen = 0,     ppslen = 0, fsize, i;
+    int       vpslen = 0,     spslen = 0,     ppslen = 0;
     if (!ctx) return;
 
     if (mp4->flags & FLAG_VIDEO_H265_ENCODE) {
         h265_parse_vps_sps_pps(buf, len, &vpsbuf, &vpslen, &spsbuf, &spslen, &ppsbuf, &ppslen);
-        if (!(mp4->flags & FLAG_AVC1_HEV1_WRITTEN)) {
+        if (vpslen && !(mp4->flags & FLAG_AVC1_HEV1_WRITTEN)) {
             mp4muxer_write_hev1_box(mp4, vpsbuf, vpslen, spsbuf, spslen, ppsbuf, ppslen);
             mp4->flags |= FLAG_AVC1_HEV1_WRITTEN;
         }
     } else {
         h264_parse_sps_pps(buf, len, &spsbuf, &spslen, &ppsbuf, &ppslen);
-        if (!(mp4->flags & FLAG_AVC1_HEV1_WRITTEN)) {
+        if (spslen && !(mp4->flags & FLAG_AVC1_HEV1_WRITTEN)) {
             mp4muxer_write_avc1_box(mp4, spsbuf, spslen, ppsbuf, ppslen);
             mp4->flags |= FLAG_AVC1_HEV1_WRITTEN;
         }
     }
 
-    fsize = len - vpslen - spslen - ppslen;
-    if (fsize == 0) return;
-    if (vpslen + spslen + ppslen) key = 1;
-    buf  += vpslen + spslen + ppslen;
-    for (i=0; i<fsize-1 && buf[i]==0; i++); buf += i+1; fsize -= i+1;
-    len   = fsize;
-    fsize = htonl(fsize);
-
     if (mp4->stszv_buf && (int)ntohl(mp4->stszv_count) < mp4->vframemax) {
-        mp4->stszv_buf[ntohl(mp4->stszv_count)] = htonl(len + sizeof(uint32_t));
+        mp4->stszv_buf[ntohl(mp4->stszv_count)] = htonl(len);
         mp4->stszv_count = htonl(ntohl(mp4->stszv_count) + 1);
     }
 
@@ -1046,7 +1038,7 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len, int key, unsigned pt
         mp4->sttsv_count  = htonl(1);
     }
 #else
-    if (mp4->sttsv_buf && ntohl(mp4->sttsv_count) < mp4->vframemax) {
+    if (mp4->sttsv_buf && (int)ntohl(mp4->sttsv_count) < mp4->vframemax) {
         mp4->sttsv_buf[ntohl(mp4->sttsv_count) * 2 + 0] = htonl(1);
         mp4->sttsv_buf[ntohl(mp4->sttsv_count) * 2 + 1] = htonl(mp4->vpts_last ? pts - mp4->vpts_last : 1000 / mp4->frate);
         mp4->sttsv_count = htonl(ntohl(mp4->sttsv_count) + 1);
@@ -1059,9 +1051,8 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len, int key, unsigned pt
         mp4->stcov_count = htonl(ntohl(mp4->stcov_count) + 1);
     }
 
-    mp4->mdat_size = htonl(ntohl(mp4->mdat_size) + len + sizeof(uint32_t));
-    mp4->chunk_off+= len + sizeof(uint32_t);
-    fwrite(&fsize, 1, sizeof(uint32_t), mp4->fp);
+    mp4->mdat_size = htonl(ntohl(mp4->mdat_size) + len);
+    mp4->chunk_off+= len;
     fwrite(buf, 1, len, mp4->fp);
 
 #if 1
@@ -1089,7 +1080,7 @@ void mp4muxer_audio(void *ctx, unsigned char *buf, int len, int key, unsigned pt
         mp4->sttsa_count  = htonl(1);
     }
 #else
-    if (mp4->sttsa_buf && ntohl(mp4->sttsa_count) < mp4->aframemax) {
+    if (mp4->sttsa_buf && (int)ntohl(mp4->sttsa_count) < mp4->aframemax) {
         mp4->sttsa_buf[ntohl(mp4->sttsa_count) * 2 + 0] = htonl(1);
         mp4->sttsa_buf[ntohl(mp4->sttsa_count) * 2 + 1] = htonl(mp4->apts_last ? pts - mp4->apts_last : 1000 * mp4->sampnum / mp4->samprate);
         mp4->sttsa_count = htonl(ntohl(mp4->sttsa_count) + 1);
