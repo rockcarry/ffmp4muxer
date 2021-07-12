@@ -5,11 +5,19 @@
 #include <time.h>
 #include "mp4muxer.h"
 
-#ifdef WIN32
-#include <winsock2.h>
+#ifdef _MSC_VER
 #pragma warning(disable:4996)
+#endif
+
+#ifndef LITTLE_ENDIAN
+#define LITTLE_ENDIAN
+#endif
+#ifdef  LITTLE_ENDIAN
+#define ntohl(a) ((((a) & 0xFF) << 24) | ((((a) >> 8) & 0xFF) << 16) | ((((a) >> 16) & 0xFF) << 8) | ((((a) >> 24) & 0xFF) << 0))
+#define htonl(a) ((((a) & 0xFF) << 24) | ((((a) >> 8) & 0xFF) << 16) | ((((a) >> 16) & 0xFF) << 8) | ((((a) >> 24) & 0xFF) << 0))
 #else
-#include <netinet/in.h>
+#define ntohl(a) (a)
+#define htonl(a) (a)
 #endif
 
 static int h26x_parse_nalu_header(uint8_t *data, int len, int *hsize)
