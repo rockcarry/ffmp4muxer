@@ -26,8 +26,8 @@ static int h26x_parse_nalu_header(uint8_t *data, int len, int *hsize)
     for (counter=0,i=0; i<len; i++) {
         if (data[i] == 0) counter++;
         else if (counter >= 2 && data[i] == 0x01) {
-            *hsize = counter;
-            return i;
+            *hsize = counter + 1;
+            return i + 1;
         } else {
             counter = 0;
         }
@@ -35,67 +35,67 @@ static int h26x_parse_nalu_header(uint8_t *data, int len, int *hsize)
     return -1;
 }
 
-static void h264_parse_sps_pps(uint8_t *data, int len, uint8_t **spsbuf, int *spslen, uint8_t **ppsbuf, int *ppslen)
+static uint8_t* h264_parse_sps_pps(uint8_t *data, int len, uint8_t **spsbuf, int *spslen, uint8_t **ppsbuf, int *ppslen)
 {
     uint8_t *sbuf = NULL, *pbuf = NULL;
     int      hsize, slen = 0,  plen = 0, i;
 
     i = h26x_parse_nalu_header(data, len, &hsize);
-    if (i < 2 || i + 1 >= len || (data[i + 1] & 0x1f) != 7) goto done;
-    sbuf = data + i - hsize; // got sps
+    if (i < 0 || i >= len || (data[i] & 0x1f) != 7) return NULL;
+    sbuf = data + i; // got sps
     data+= i;
     len -= i;
     i = h26x_parse_nalu_header(data, len, &hsize);
-    slen = (int)(data + i - sbuf - hsize);
+    slen = (int)(data + i - hsize - sbuf);
 
-    if (i < 2 || i + 1 >= len || (data[i + 1] & 0x1f) != 8) goto done;
-    pbuf = data + i - hsize; // got pps
+    if (i < 0 || i >= len || (data[i] & 0x1f) != 8) return NULL;
+    pbuf = data + i; // got pps
     data+= i;
     len -= i;
     i = h26x_parse_nalu_header(data, len, &hsize);
-    plen = (int)(data + i - pbuf - hsize);
+    plen = (int)(data + i - hsize - pbuf);
 
-done:
     if (spsbuf) *spsbuf = sbuf;
     if (ppsbuf) *ppsbuf = pbuf;
     if (spslen) *spslen = slen;
     if (ppslen) *ppslen = plen;
+    return (data + i);
 }
 
-static void h265_parse_vps_sps_pps(uint8_t *data, int len, uint8_t **vpsbuf, int *vpslen, uint8_t **spsbuf, int *spslen, uint8_t **ppsbuf, int *ppslen)
+static uint8_t* h265_parse_vps_sps_pps(uint8_t *data, int len, uint8_t **vpsbuf, int *vpslen, uint8_t **spsbuf, int *spslen, uint8_t **ppsbuf, int *ppslen)
 {
     uint8_t *vbuf = NULL, *sbuf = NULL, *pbuf = NULL;
     int      hsize, vlen = 0, slen = 0,  plen = 0, i;
 
     i = h26x_parse_nalu_header(data, len, &hsize);
-    if (i < 2 || i + 1 >= len || (data[i + 1] >> 1) != 32) goto done;
+    if (i < 0 || i >= len || (data[i] >> 1) != 32) return NULL;
     vbuf = data + i - hsize; // got vps
     data+= i;
     len -= i;
     i = h26x_parse_nalu_header(data, len, &hsize);
-    vlen = (int)(data + i - vbuf - hsize);
+    vlen = (int)(data + i - hsize - vbuf);
 
-    if (i < 2 || i + 1 >= len || (data[i + 1] >> 1) != 33) goto done;
+    if (i < 0 || i >= len || (data[i] >> 1) != 33) return NULL;
     sbuf = data + i - hsize; // got sps
     data+= i;
     len -= i;
     i = h26x_parse_nalu_header(data, len, &hsize);
-    slen = (int)(data + i - sbuf - hsize);
+    slen = (int)(data + i - hsize - sbuf);
 
-    if (i < 2 || i + 1 >= len || (data[i + 1] >> 1) != 34) goto done;
+    if (i < 0 || i >= len || (data[i] >> 1) != 34) return NULL;
     pbuf = data + i - hsize; // got pps
     data+= i;
     len -= i;
     i = h26x_parse_nalu_header(data, len, &hsize);
-    plen = (int)(data + i - pbuf - hsize);
+    plen = (int)(data + i - hsize - pbuf);
 
-done:
     if (vpsbuf) *vpsbuf = vbuf;
     if (spsbuf) *spsbuf = sbuf;
     if (ppsbuf) *ppsbuf = pbuf;
     if (vpslen) *vpslen = vlen;
     if (spslen) *spslen = slen;
     if (ppslen) *ppslen = plen;
+    return (data + i);
 }
 
 #ifndef offsetof
@@ -503,10 +503,6 @@ static void mp4muxer_write_avc1_box(MP4FILE *mp4, uint8_t *spsbuf, int spslen, u
 {
     AVC1BOX avc1box = {0};
     AVCCBOX avccbox = {0};
-    int     i;
-
-    for (i=0; i<spslen-1 && spsbuf[i]==0; i++); spsbuf += i+1; spslen -= i+1;
-    for (i=0; i<ppslen-1 && ppsbuf[i]==0; i++); ppsbuf += i+1; ppslen -= i+1;
 
     avccbox.avcc_size          = sizeof(AVCCBOX) + spslen + spslen;
     avccbox.avcc_type          = MP4_FOURCC('a', 'v', 'c', 'C');
@@ -521,7 +517,7 @@ static void mp4muxer_write_avc1_box(MP4FILE *mp4, uint8_t *spsbuf, int spslen, u
     avccbox.avcc_pps_len       = (uint16_t)(htonl(ppslen) >> 16);
 
     avc1box.avc1_size          = sizeof(AVC1BOX) + avccbox.avcc_size;
-    avc1box.avc1_type          = MP4_FOURCC('h', '2', '6', '4');
+    avc1box.avc1_type          = MP4_FOURCC('a', 'v', 'c', '1');
     avc1box.avc1_data_refidx   = (uint16_t)(htonl(1 ) >> 16);
     avc1box.avc1_width         = (uint16_t)(htonl(mp4->vw) >> 16);
     avc1box.avc1_height        = (uint16_t)(htonl(mp4->vh) >> 16);
@@ -548,11 +544,6 @@ static void mp4muxer_write_hev1_box(MP4FILE *mp4, uint8_t *vpsbuf, int vpslen, u
 {
     AVC1BOX hev1box = {0};
     HVCCBOX hvccbox = {0};
-    int     i;
-
-    for (i=0; i<vpslen-1 && vpsbuf[i]==0; i++); vpsbuf += i+1; vpslen -= i+1;
-    for (i=0; i<spslen-1 && spsbuf[i]==0; i++); spsbuf += i+1; spslen -= i+1;
-    for (i=0; i<ppslen-1 && ppsbuf[i]==0; i++); ppsbuf += i+1; ppslen -= i+1;
 
     hvccbox.hvcc_size            = sizeof(HVCCBOX) + 3 * 5 + vpslen + spslen + ppslen;
     hvccbox.hvcc_type            = MP4_FOURCC('h', 'v', 'c', 'C');
@@ -1013,21 +1004,23 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len, int key, unsigned pt
     MP4FILE *mp4 = (MP4FILE*)ctx;
     uint8_t  *vpsbuf = NULL, *spsbuf = NULL, *ppsbuf = NULL;
     int       vpslen = 0,     spslen = 0,     ppslen = 0;
+    uint32_t  framesize;
     if (!ctx) return;
 
     if (mp4->flags & FLAG_VIDEO_H265_ENCODE) {
-        h265_parse_vps_sps_pps(buf, len, &vpsbuf, &vpslen, &spsbuf, &spslen, &ppsbuf, &ppslen);
-        if (vpslen && !(mp4->flags & FLAG_AVC1_HEV1_WRITTEN)) {
+        if (!(mp4->flags & FLAG_AVC1_HEV1_WRITTEN) && h265_parse_vps_sps_pps(buf, len, &vpsbuf, &vpslen, &spsbuf, &spslen, &ppsbuf, &ppslen)) {
             mp4muxer_write_hev1_box(mp4, vpsbuf, vpslen, spsbuf, spslen, ppsbuf, ppslen);
             mp4->flags |= FLAG_AVC1_HEV1_WRITTEN;
         }
     } else {
-        h264_parse_sps_pps(buf, len, &spsbuf, &spslen, &ppsbuf, &ppslen);
-        if (spslen && !(mp4->flags & FLAG_AVC1_HEV1_WRITTEN)) {
+        if (!(mp4->flags & FLAG_AVC1_HEV1_WRITTEN) && h264_parse_sps_pps(buf, len, &spsbuf, &spslen, &ppsbuf, &ppslen)) {
             mp4muxer_write_avc1_box(mp4, spsbuf, spslen, ppsbuf, ppslen);
             mp4->flags |= FLAG_AVC1_HEV1_WRITTEN;
         }
     }
+
+    framesize = htonl(len);
+    len += sizeof(framesize);
 
     if (mp4->stszv_buf && (int)ntohl(mp4->stszv_count) < mp4->vframemax) {
         mp4->stszv_buf[ntohl(mp4->stszv_count)] = htonl(len);
@@ -1061,7 +1054,8 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len, int key, unsigned pt
 
     mp4->mdat_size = htonl(ntohl(mp4->mdat_size) + len);
     mp4->chunk_off+= len;
-    fwrite(buf, 1, len, mp4->fp);
+    fwrite(&framesize, 1, sizeof(framesize), mp4->fp);
+    fwrite(buf, 1, ntohl(framesize), mp4->fp);
 
 #if 1
     if (ntohl(mp4->stszv_count) % (mp4->frate * 5) == 0) {
