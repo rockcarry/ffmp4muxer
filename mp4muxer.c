@@ -687,7 +687,7 @@ static void write_fixed_tracka_data(MP4FILE *mp4)
     fseek(mp4->fp, 0, SEEK_END);
 }
 
-void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, int chnum, int samprate, int sampbits, int sampnum, unsigned char *aacspecinfo, int h265)
+void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, int h265, int chnum, int samprate, int sampbits, int sampnum, unsigned char *aacspecinfo)
 {
     MP4FILE *mp4 = calloc(1, sizeof(MP4FILE));
     if (!mp4) return NULL;
