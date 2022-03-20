@@ -20,21 +20,6 @@
 #define htonl(a) (a)
 #endif
 
-static int h26x_parse_nalu_header(uint8_t *data, int len, int *hsize)
-{
-    int counter, i;
-    for (counter = 0, i = 0; i < len; i++) {
-        if (data[i] == 0) counter++;
-        else if (counter >= 2 && data[i] == 0x01) {
-            *hsize = counter + 1;
-            return i + 1;
-        } else {
-            counter = 0;
-        }
-    }
-    return -1;
-}
-
 #ifndef offsetof
 #define offsetof(type, member) ((size_t)&((type*)0)->member)
 #endif
@@ -436,6 +421,21 @@ typedef struct {
     uint8_t  numOfArrays;
 } HVCCBOX;
 #pragma pack()
+
+static int h26x_parse_nalu_header(uint8_t *data, int len, int *hsize)
+{
+    int counter, i;
+    for (counter = 0, i = 0; i < len; i++) {
+        if (data[i] == 0) counter++;
+        else if (counter >= 2 && data[i] == 0x01) {
+            *hsize = counter + 1;
+            return i + 1;
+        } else {
+            counter = 0;
+        }
+    }
+    return -1;
+}
 
 static void mp4muxer_write_avc1_box(MP4FILE *mp4, uint8_t *spsbuf, int spslen, uint8_t *ppsbuf, int ppslen)
 {
