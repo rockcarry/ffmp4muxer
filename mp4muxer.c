@@ -629,7 +629,7 @@ static void write_fixed_tracka_data(MP4FILE *mp4)
     fseek(mp4->fp, 0, SEEK_END);
 }
 
-void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, int h265, int chnum, int samprate, int sampbits, int sampnum, unsigned char *aacspecinfo)
+void* mp4muxer_init(char *file, int duration, int rotation, int w, int h, int frate, int gop, int h265, int chnum, int samprate, int sampbits, int sampnum, unsigned char *aacspecinfo)
 {
     MP4FILE *mp4 = calloc(1, sizeof(MP4FILE));
     if (!mp4) return NULL;
@@ -664,10 +664,17 @@ void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, 
     mp4->mvhd_duration       = htonl(duration  );
     mp4->mvhd_playrate       = htonl(0x00010000);
     mp4->mvhd_volume         = (uint16_t)(htonl(0x0100) >> 16);
-    mp4->mvhd_matrix[0]      = htonl(0x00010000);
-    mp4->mvhd_matrix[4]      = htonl(0x00010000);
-    mp4->mvhd_matrix[8]      = htonl(0x40000000);
-    mp4->mvhd_next_trackid   = htonl(3         );
+    if (rotation == 1) {
+        mp4->mvhd_matrix[1]  = htonl( 65536);
+        mp4->mvhd_matrix[3]  = htonl(-65536);
+        mp4->mvhd_matrix[6]  = htonl(0x03840000);
+        mp4->mvhd_matrix[8]  = htonl(0x40000000);
+    } else if (rotation == 0) {
+        mp4->mvhd_matrix[0]  = htonl(0x00010000);
+        mp4->mvhd_matrix[4]  = htonl(0x00010000);
+        mp4->mvhd_matrix[8]  = htonl(0x40000000);
+    }
+    mp4->mvhd_next_trackid   = htonl(3);
 
     // video track
     mp4->trakv_size          = offsetof(MP4FILE, mdiav_size) - offsetof(MP4FILE, trakv_size);
@@ -677,9 +684,16 @@ void* mp4muxer_init(char *file, int duration, int w, int h, int frate, int gop, 
     mp4->tkhdv_flags[2]      = 0xF;
     mp4->tkhdv_trackid       = htonl(1         );
     mp4->tkhdv_duration      = htonl(duration  );
-    mp4->tkhdv_matrix[0]     = htonl(0x00010000);
-    mp4->tkhdv_matrix[4]     = htonl(0x00010000);
-    mp4->tkhdv_matrix[8]     = htonl(0x40000000);
+    if (rotation == 1) {
+        mp4->tkhdv_matrix[1] = htonl( 65536);
+        mp4->tkhdv_matrix[3] = htonl(-65536);
+        mp4->tkhdv_matrix[6] = htonl(0x03840000);
+        mp4->tkhdv_matrix[8] = htonl(0x40000000);
+    } else if (rotation == 0) {
+        mp4->tkhdv_matrix[0] = htonl(0x00010000);
+        mp4->tkhdv_matrix[4] = htonl(0x00010000);
+        mp4->tkhdv_matrix[8] = htonl(0x40000000);
+    }
     mp4->tkhdv_width         = htonl(w << 16   );
     mp4->tkhdv_height        = htonl(h << 16   );
 
@@ -984,7 +998,7 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len, int key, unsigned pt
                 }
             }
         }
-        if (((mp4->flags & FLAG_VIDEO_H265_ENCODE) && nalu_type >= 0 && nalu_type <= 21) || (!(mp4->flags & FLAG_VIDEO_H265_ENCODE) && nalu_type >= 1 && nalu_type <= 5)) {
+        if (1 || ((mp4->flags & FLAG_VIDEO_H265_ENCODE) && nalu_type >= 0 && nalu_type <= 21) || (!(mp4->flags & FLAG_VIDEO_H265_ENCODE) && nalu_type >= 1 && nalu_type <= 5)) {
             u32tempvalue = htonl(nalu_len);
             framesize   += sizeof(uint32_t) + nalu_len;
             fwrite(&u32tempvalue, 1, sizeof(u32tempvalue), mp4->fp);
