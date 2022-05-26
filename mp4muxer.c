@@ -644,7 +644,7 @@ void* mp4muxer_init(char *file, int duration, int rotation, int w, int h, int fr
     mp4->moov_type           = MP4_FOURCC('m', 'o', 'o', 'v');
     mp4->mvhd_size           = htonl(offsetof(MP4FILE, trakv_size) - offsetof(MP4FILE, mvhd_size));
     mp4->mvhd_type           = MP4_FOURCC('m', 'v', 'h', 'd');
-    mp4->mvhd_create_time    = htonl(time(NULL) + 2082844800ul);
+    mp4->mvhd_create_time    = htonl((uint32_t)time(NULL) + 2082844800ul);
     mp4->mvhd_modify_time    = mp4->mvhd_create_time;
     mp4->mvhd_timescale      = htonl(1000      );
     mp4->mvhd_duration       = htonl(duration  );
@@ -954,7 +954,7 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len, int key, unsigned pt
         nalu_buf = buf + i;
         buf += i, len -= i;
         i = h26x_parse_nalu_header(buf, len, &hsize);
-        nalu_len = (i == -1) ? len : (buf + i - hsize - nalu_buf);
+        nalu_len = (i == -1) ? len : (int)(buf + i - hsize - nalu_buf);
 
         if (mp4->flags & FLAG_VIDEO_H265_ENCODE) {
             nalu_type = (nalu_buf[0] & 0x7F) >> 1;
