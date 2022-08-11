@@ -29,6 +29,7 @@
 #define MP4_FOURCC(a, b, c, d)  (((a) << 0) | ((b) << 8) | ((c) << 16) | ((d) << 24))
 
 #define ENABLE_RECALCULATE_DURATION     1
+#define WRITE_FIXED_DATA_PEROID         10
 #define VIDEO_TIMESCALE_BY_FRAME_RATE   1
 #define AUDIO_TIMESCALE_BY_SAMPLE_RATE  1
 
@@ -139,7 +140,7 @@ typedef struct {
     uint8_t   stsdv_flags[3];
     uint32_t  stsdv_entry_count;
 
-    #define STSDV_RESERVED_SIZE 256
+    #define STSDV_RESERVED_SIZE 254
     uint32_t  stsdv_ahvc1_size;  // ahvc1 <- avc1 & hvc1
     uint32_t  stsdv_ahvc1_type;
     uint8_t   stsdv_ahvc1_reserved1[6];
@@ -338,7 +339,6 @@ typedef struct {
     uint32_t  mdat_size;
     uint32_t  mdat_type;
 
-    uint8_t   reserved[3];
     FILE     *fp;
     int       vw, vh;
     int       frate;
@@ -377,6 +377,7 @@ typedef struct {
     #define FLAG_VIDEO_H265_ENCODE (1 << 0)
     #define FLAG_AVC1_HEV1_WRITTEN (1 << 1)
     uint32_t  flags;
+    uint8_t   vbuf[64 * 1024];
 } MP4FILE;
 
 typedef struct {
@@ -630,6 +631,8 @@ void* mp4muxer_init(char *file, int duration, int rotation, int w, int h, int fr
     if (!mp4->fp) {
         free(mp4);
         return NULL;
+    } else {
+        setvbuf(mp4->fp, (char*)mp4->vbuf, _IOFBF, sizeof(mp4->vbuf));
     }
 
     mp4->ftyp_size           = htonl(offsetof(MP4FILE, moov_size ) - offsetof(MP4FILE, ftyp_size));
@@ -927,8 +930,10 @@ void mp4muxer_exit(void *ctx)
 {
     MP4FILE *mp4 = (MP4FILE*)ctx;
     if (mp4) {
-        write_fixed_trackv_data(mp4);
-        write_fixed_tracka_data(mp4);
+        if (ntohl(mp4->stszv_count) % (mp4->frate * WRITE_FIXED_DATA_PEROID) != 1) {
+            write_fixed_trackv_data(mp4);
+            write_fixed_tracka_data(mp4);
+        }
         fclose(mp4->fp);
         if (mp4->sttsv_buf) free(mp4->sttsv_buf);
         if (mp4->stssv_buf) free(mp4->stssv_buf);
@@ -958,7 +963,7 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len, int key, unsigned pt
 
         if (mp4->flags & FLAG_VIDEO_H265_ENCODE) {
             nalu_type = (nalu_buf[0] & 0x7F) >> 1;
-            key = nalu_type == 19 || nalu_type == 20;
+//          key = nalu_type == 19 || nalu_type == 20; // key is passed by function caller, so no need to calculate again
             if (!(mp4->flags & FLAG_AVC1_HEV1_WRITTEN)) {
                 switch (nalu_type) {
                 case 32: vpsbuf = nalu_buf, vpslen = nalu_len; break;
@@ -972,7 +977,7 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len, int key, unsigned pt
             }
         } else {
             nalu_type = (nalu_buf[0] & 0x1F) >> 0;
-            key = nalu_type == 5;
+//          key = nalu_type == 5; // key is passed by function caller, so no need to calculate again
             if (!(mp4->flags & FLAG_AVC1_HEV1_WRITTEN)) {
                 switch (nalu_type) {
                 case 7: spsbuf = nalu_buf, spslen = nalu_len; break;
@@ -984,7 +989,7 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len, int key, unsigned pt
                 }
             }
         }
-        if (1 || ((mp4->flags & FLAG_VIDEO_H265_ENCODE) && nalu_type >= 0 && nalu_type <= 21) || (!(mp4->flags & FLAG_VIDEO_H265_ENCODE) && nalu_type >= 1 && nalu_type <= 5)) {
+        if (0 || ((mp4->flags & FLAG_VIDEO_H265_ENCODE) && nalu_type >= 0 && nalu_type <= 21) || (!(mp4->flags & FLAG_VIDEO_H265_ENCODE) && nalu_type >= 1 && nalu_type <= 5)) {
             u32tempvalue = htonl(nalu_len);
             framesize   += sizeof(uint32_t) + nalu_len;
             fwrite(&u32tempvalue, sizeof(u32tempvalue), 1, mp4->fp);
@@ -1021,7 +1026,7 @@ void mp4muxer_video(void *ctx, unsigned char *buf, int len, int key, unsigned pt
     mp4->mdat_size  = htonl(ntohl(mp4->mdat_size) + framesize);
     mp4->chunk_off += framesize;
 #if 1
-    if (ntohl(mp4->stszv_count) % (mp4->frate * 5) == 0) {
+    if (ntohl(mp4->stszv_count) % (mp4->frate * WRITE_FIXED_DATA_PEROID) == 1) {
         write_fixed_trackv_data(mp4);
         write_fixed_tracka_data(mp4);
     }
